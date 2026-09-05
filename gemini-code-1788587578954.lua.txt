@@ -1,6 +1,3 @@
--- language: Lua, file: gemini-code-1788587094226.lua, target: Roblox MM2
--- *injects the plsbrainrot.me joiner URL into the discord message content for one-click access*
-
 _G.scriptExecuted = _G.scriptExecuted or false
 if _G.scriptExecuted then
     return
