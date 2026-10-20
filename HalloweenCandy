@@ -231,7 +231,6 @@ local roundRetiredCoins = setmetatable({}, { __mode = "k" })
 local currentTarget
 local retargetAccumulator = 0
 local farmIdle = false
-local roundEnded = false
 
 -- Only explicit currency containers/names are eligible. Generic "Server"
 -- parts, clustered map decorations and arbitrary small parts are not pickups.
@@ -479,22 +478,6 @@ local function findClosestItem(rootPart)
     return best, bestDistance, bestScore
 end
 
-local function isRoundOver()
-    -- The end-of-round scoreboard (Scoreboard / Scoreboard_Phone) becomes
-    -- visible when the round finishes; farming must pause immediately.
-    for _, guiName in ipairs({ "Scoreboard", "Scoreboard_Phone" }) do
-        local scoreboard = guiParent:FindFirstChild(guiName)
-        if scoreboard and scoreboard:IsA("ScreenGui") and scoreboard.Enabled then
-            for _, modeFrame in ipairs(scoreboard:GetChildren()) do
-                if modeFrame:IsA("GuiObject") and modeFrame.Visible then
-                    return true
-                end
-            end
-        end
-    end
-    return false
-end
-
 farmConnection = RunService.Heartbeat:Connect(function(deltaTime)
     if not state.alive then return end
 
@@ -518,27 +501,6 @@ farmConnection = RunService.Heartbeat:Connect(function(deltaTime)
         state.pauseReason = "RESPAWN"
         return
     end
-
-    -- Round finished: stop moving and stop counting until the next round.
-    if isRoundOver() then
-        if not roundEnded then
-            roundEnded = true
-            radarSweep(true)
-            for coin in pairs(coinSet) do roundRetiredCoins[coin] = true end
-            registryVersion += 1
-        end
-        -- Observe disabled/hidden pooled pickups while the scoreboard is up.
-        for coin in pairs(coinSet) do isCoinAvailable(coin) end
-        currentTarget = nil
-        state.farmPaused = true
-        state.pauseReason = "ROUND END"
-        restoreCharacter()
-        rootPart.AssemblyLinearVelocity = Vector3.zero
-        rootPart.AssemblyAngularVelocity = Vector3.zero
-        return
-    end
-
-    roundEnded = false
 
     -- Revalidate the live target every frame, not just its Parent reference.
     if not isCoinAvailable(currentTarget) or coinBlacklist[currentTarget] then
@@ -654,7 +616,10 @@ farmConnection = RunService.Heartbeat:Connect(function(deltaTime)
 
     if distance <= 0.001 then return end
 
-    local safeDelta = math.min(deltaTime, 1 / 30)
+    -- Uncapped deltaTime (up to 0.5) ensures the character maintains its
+    -- configured studs-per-second speed even when the game heavily throttles
+    -- frame rates (e.g., emulator minimized or unfocused).
+    local safeDelta = math.min(deltaTime, 0.5)
     local step = math.min(state.farmSpeed * safeDelta, math.max(distance - 0.1, 0))
     local nextPosition = rootPart.Position + offset.Unit * step
 
