@@ -1778,7 +1778,20 @@ connect(closeButton.Activated, function()
     end)
 end)
 
--- Background animation, slider movement and farm statistics
+-- Decoupled background loop: runs on Heartbeat so it continues executing
+-- when the emulator window is minimized or unfocused.
+local bagAccumulator = 0
+connect(RunService.Heartbeat, function(deltaTime)
+    if not state.alive then return end
+    bagAccumulator += deltaTime
+    if bagAccumulator >= 0.2 then
+        bagAccumulator = 0
+        updateBagFromInterface()
+        killCharacterWhenBagIsFull()
+    end
+end)
+
+-- UI updates and visual animations (haults when minimized to save resources).
 local elapsed = 0
 local statsAccumulator = 0
 local lastDecorUpdate = 0
@@ -1801,7 +1814,6 @@ connect(RunService.RenderStepped, function(deltaTime)
         timeStat.Text = string.format("%02d:%02d", minutes, seconds)
         rateStat.Text = neon:integer(perHour)
         speedStat.Text = tostring(state.farmSpeed)
-        updateBagFromInterface()
         bagStat.Text = string.format("%d/%d%s", state.bagCount, state.bagLimit, state.bagFound and "" or " (?)")
         bagStat.TextColor3 = state.bagCount >= state.bagLimit and Theme.Coral or Theme.OrangeBright
         if not state.autofarm then
@@ -1819,7 +1831,6 @@ connect(RunService.RenderStepped, function(deltaTime)
             neon.farmStatus.TextColor3 = statsStatus.TextColor3
             neon.farmDot.BackgroundColor3 = statsStatus.TextColor3
         end
-        killCharacterWhenBagIsFull()
     end
 
     -- Perf: stop writing slider properties once the knob has settled.
