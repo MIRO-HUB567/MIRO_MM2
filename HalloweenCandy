@@ -147,6 +147,39 @@ for _, previousName in ipairs({ GUI_NAME, "SkoblikoSummerNeonGUI" }) do
     end
 end
 
+-- Automatically close the end-of-round win screen box
+task.spawn(function()
+    while task.wait(0.5) do
+        local playerGui = player:FindFirstChild("PlayerGui")
+        if playerGui then
+            for _, obj in ipairs(playerGui:GetDescendants()) do
+                if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+                    local txt = string.lower(obj.Text)
+                    if string.find(txt, "innocents win") or string.find(txt, "murderer win") or string.find(txt, "sheriff win") then
+                        local parent = obj.Parent
+                        local topGui = nil
+                        while parent and parent ~= playerGui and parent ~= game do
+                            if parent:IsA("ScreenGui") or parent.Parent == playerGui then
+                                topGui = parent
+                                break
+                            end
+                            parent = parent.Parent
+                        end
+                        
+                        if topGui then
+                            if topGui:IsA("ScreenGui") then
+                                topGui.Enabled = false
+                            elseif topGui:IsA("GuiObject") then
+                                topGui.Visible = false
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
 local state = {
     alive = true,
     closing = false,
